@@ -17,7 +17,7 @@
 
 **Exit criterion (from roadmap):** Baymax reads and writes patient records through Big Book using the Java SDK, on a `lite` stack that installed in ≤10 minutes on a laptop.
 
-`lite` = Postgres + HAPI FHIR JPA + Keycloak + Big Book server. Nothing else. Every v0.1 requirement must be satisfiable inside that set.
+`lite` = three containers: Postgres + Keycloak + Big Book server (HAPI FHIR JPA embedded in the Big Book JVM, ADR-006). Nothing else. Every v0.1 requirement must be satisfiable inside that set.
 
 ---
 
@@ -170,7 +170,7 @@ Exit test: invite from BB-R-005 lands in the mail catcher with a working set-pas
 Medplum ref: `self-hosting/` (index, running-full-medplum-stack-in-docker, install-from-scratch, install-on-kubernetes, server-config, setting-configuration, super-admin-guide, super-admin-cli, upgrading-server, disaster-recovery, monitoring, opentelemetry)
 Fill: **glue** (Helm chart, compose, profiles, docs) · Version: v0.1 · Status: blessed
 
-1. `docker compose up` with the `lite` file starts Postgres, HAPI, Keycloak, Big Book; ≤10 min on a laptop with a cold image cache; two commands max (mirrors Medplum's `curl … && docker compose up -d`). Admin UI reachable with the `admin` overlay (ADR-004; documented +3 min, outside the `lite` timer).
+1. `docker compose up` with the `lite` file starts Postgres, Keycloak, Big Book (HAPI embedded); ≤10 min on a laptop with a cold image cache; two commands max (mirrors Medplum's `curl … && docker compose up -d`). Admin UI reachable with the `admin` overlay (ADR-004; documented +3 min, outside the `lite` timer).
 2. `helm install bigbook` with `profile: lite` produces the same stack on any Kubernetes; `profile: full` adds OpenSearch, MinIO, n8n, Traefik, Grafana stack, Vault, Snowstorm (per version).
 3. Configuration by env/values only; every key documented in one table (`docs/guides/config.md`), with defaults; secrets never in values files.
 4. First-boot bootstrap: realm, super-admin project, super-admin user, default policies; idempotent on restart.

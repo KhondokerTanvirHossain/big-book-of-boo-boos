@@ -27,7 +27,7 @@ See `app/lowcode/SCREENS.md`. Gap the inventory exposed: S5/S6/S8/S9 call admin 
 
 ## Consequences (folded into issues)
 
-- **#2** — `lite` stays four containers; "admin UI reachable" leaves the install AC. `deploy/compose/admin.yml` overlay documented with its own +3 min note.
+- **#2** — `lite` stays three containers (ADR-006); "admin UI reachable" leaves the install AC. `deploy/compose/admin.yml` overlay documented with its own +3 min note.
 - **#4** — `X-Project` header selects the target partition for super-admin tokens only; a non-super-admin sending it gets 403; a super-admin write without it gets 400.
 - **#12** — one `AuditEvent` per delivery attempt (outcome, attempt number, HTTP status), searchable by Subscription reference, minimal fields, no BALP. The Subscriptions screen reads it.
 - **#16** — rewritten: Appsmith CE overlay, service-account model, verify-first items below, ≤3 min overlay budget, no Business/Enterprise features.

@@ -22,7 +22,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 
 | Slot | Component | Status |
 |---|---|---|
-| FHIR store, search, GraphQL, bulk, Subscriptions | HAPI FHIR JPA | decided |
+| FHIR store, search, GraphQL, bulk, Subscriptions | HAPI FHIR JPA, embedded in the Big Book JVM (ADR-006) | decided |
 | Full-text search | HAPI + OpenSearch | decided, `full` profile only |
 | Identity, OIDC/OAuth2, users, MFA | Keycloak | decided |
 | SMART-on-FHIR scopes | Keycloak extension (pick a maintained one) | open |
@@ -64,7 +64,7 @@ Target: 5–10k lines. If a feature needs more than that, the answer is a third-
 ## Principles
 
 - **Reuse first.** Before writing code, prove no maintained component does it.
-- **`lite` must work in 10 minutes on a laptop.** Postgres + HAPI + Keycloak + Big Book, nothing else. Everything in `full` is optional and must degrade cleanly.
+- **`lite` must work in 10 minutes on a laptop.** Three containers: Postgres + Keycloak + Big Book (HAPI JPA embedded, ADR-006), nothing else. Everything in `full` is optional and must degrade cleanly.
 - **Wire-compatibility is a growth hack.** Match Medplum's FHIR and OAuth endpoints where it costs nothing; never match its internals.
 - **Pin everything.** One upgrade cadence for all upstreams; e2e smoke test runs the full stack in CI.
 - **Docs live here.** ADRs in `docs/adr/`, decisions in this file. No context outside the repo.
@@ -103,6 +103,7 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 - ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
 - ADR-004 Admin UI path — decided: Appsmith CE overlay v0.1 (service-account); Vaadin Flow v0.3 (issue #1 closed the `@medplum/app` path).
 - ADR-005 SMART-on-FHIR Keycloak extension.
+- ADR-006 HAPI deployment topology — decided: embedded in the Big Book JVM; `lite` = three containers.
 
 ## How the three surfaces work
 

@@ -1,0 +1,210 @@
+# Big Book — Architecture
+
+> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed) or ADR-001/003/004/006 (HAPI JPA embedded in the Big Book server; `lite` = three containers). Status: **current** (ADR-006 decided 2026-09-12). If code and this file disagree, code wins — then fix this file.
+
+## 1. Components — `lite`, with `full` and `admin` overlays dashed
+
+```mermaid
+flowchart LR
+  classDef overlay stroke-dasharray: 5 5
+
+  SDK["Java SDK / any FHIR client"]
+  BROWSER["Browser"]
+
+  subgraph LITE["lite — 3 containers"]
+    direction TB
+    BB["Big Book server (Spring Boot)<br/>HAPI FHIR JPA embedded<br/>/fhir/R4 · /oauth2/* · /auth/me · /admin/*"]
+    KC["Keycloak"]
+    PG["Postgres<br/>(hapi · bigbook · keycloak DBs)"]
+  end
+
+  subgraph ADMIN["admin overlay"]
+    AS["Appsmith CE"]
+  end
+
+  subgraph FULL["full overlay"]
+    TR["Traefik"]
+    OS["OpenSearch"]
+    MI["MinIO"]
+    N8["n8n"]
+    VA["Vault"]
+    OT["OTel collector → Grafana stack"]
+    SN["Snowstorm (v0.3)"]
+    EB["Event bus — ADR-002 open"]
+  end
+
+  MAIL["SMTP / mail catcher (optional)"]
+  HOOK["rest-hook endpoints"]
+
+  SDK -->|"HTTPS · FHIR REST/JSON · OAuth2"| BB
+  BROWSER -->|"HTTPS · 302 from /oauth2/authorize"| KC
+  BROWSER -->|"HTTPS"| AS
+  BB -->|"HTTP · OIDC token passthrough · JWKS · Admin REST"| KC
+  BB -->|"JDBC"| PG
+  KC -->|"JDBC"| PG
+  BB -->|"HTTPS POST · rest-hook + X-Signature"| HOOK
+  BB -->|"SMTP"| MAIL
+  KC -->|"SMTP"| MAIL
+  AS -->|"HTTPS · REST + X-Project"| BB
+
+  TR -.->|"HTTP · TLS terminated"| BB
+  TR -.->|"HTTP"| KC
+  TR -.->|"HTTP"| AS
+  BB -.->|"HTTP · HAPI ElasticSearch client"| OS
+  BB -.->|"HTTP · S3 API"| MI
+  BB -.->|"HTTPS POST · rest-hook"| N8
+  N8 -.->|"HTTPS · FHIR REST (ClientApplication token)"| BB
+  BB -.->|"HTTPS · KV"| VA
+  BB -.->|"OTLP/gRPC"| OT
+  BB -.->|"HTTP · FHIR terminology"| SN
+  BB -.->|"ADR-002"| EB
+
+  class AS,TR,OS,MI,N8,VA,OT,SN,EB,ADMIN,FULL overlay
+```
+
+Container count: `lite` 3 · `+admin` 4 · `full` 3 + up to 8.
+
+## 2. Request paths
+
+### (a) SDK client-credentials → `/fhir/R4/Patient`
+
+```mermaid
+sequenceDiagram
+  participant SDK as BigBookClient
+  box Big Book container (one JVM)
+    participant BB as Big Book (Spring)
+    participant HAPI as HAPI JPA (embedded)
+  end
+  participant KC as Keycloak
+  participant PG as Postgres
+
+  SDK->>BB: POST /oauth2/token (client_credentials)
+  BB->>KC: POST /realms/bigbook/protocol/openid-connect/token (passthrough)
+  KC-->>BB: access_token {project, profile, membership}
+  BB-->>SDK: token (issuer = Big Book public URL)
+
+  SDK->>BB: GET /fhir/R4/Patient?name=x  Bearer
+  BB->>BB: validate JWT (JWKS cached) · MDC: request-id, project, user
+  BB->>HAPI: STORAGE_PARTITION_IDENTIFY_READ → partition = project claim
+  BB->>HAPI: AuthorizationInterceptor rule list ← AccessPolicy translator (cached per membership) — ADR-001
+  BB->>HAPI: SearchNarrowingInterceptor → + partition + criteria (pre-query)
+  HAPI->>PG: SQL search
+  PG-->>HAPI: rows
+  BB->>HAPI: STORAGE_PRESHOW_RESOURCES → FhirQueryRuleTester backstop · hiddenFields removed
+  HAPI-->>SDK: 200 Bundle searchset · application/fhir+json · ETag
+```
+
+### (b) `/auth/me`
+
+```mermaid
+sequenceDiagram
+  participant SDK as BigBookClient
+  participant BB as Big Book (Spring)
+  participant PG as Postgres (bigbook schema)
+  participant KC as Keycloak
+
+  SDK->>BB: GET /auth/me  Bearer
+  BB->>BB: validate JWT → membership id from claim
+  BB->>PG: membership, project, profile ref, accessPolicy[], userConfiguration
+  BB->>KC: Admin REST: user sessions, MFA enrolled (security block)
+  BB-->>SDK: {profile, project, membership, config, accessPolicy, security}
+```
+
+### (c) Subscription delivery — rest-hook, signature, AuditEvent
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  box Big Book container
+    participant HAPI as HAPI JPA
+    participant BB as Big Book hooks
+  end
+  participant PG as Postgres
+  participant H as rest-hook endpoint
+
+  C->>HAPI: POST /fhir/R4/Patient
+  HAPI->>PG: commit (partition = project)
+  HAPI->>BB: SUBSCRIPTION_RESOURCE_MATCHED
+  BB->>BB: re-check subscription author's read rules (ADR-001); drop if denied
+  HAPI->>BB: SUBSCRIPTION_BEFORE_REST_HOOK_DELIVERY
+  BB->>BB: apply author's hiddenFields · X-Signature = HMAC(body, per-subscription secret)
+  HAPI->>H: POST payload + X-Signature
+  H-->>HAPI: 2xx | failure
+  HAPI->>BB: SUBSCRIPTION_AFTER_REST_HOOK_DELIVERY / _FAILED
+  BB->>PG: AuditEvent {entity=Subscription/id, outcome, attempt, request-id} in project partition
+  Note over HAPI: failure → retry with backoff, max attempts configurable (BB-R-007.3)
+```
+
+AuditEvent-per-attempt is BB-R-007.3, blessed (ADR-004 consequence).
+
+### (d) Super-admin `X-Project` call from Appsmith
+
+```mermaid
+sequenceDiagram
+  participant AS as Appsmith (admin overlay)
+  box Big Book container
+    participant BB as Big Book (Spring)
+    participant HAPI as HAPI JPA
+  end
+  participant KC as Keycloak
+  participant PG as Postgres
+
+  AS->>BB: POST /oauth2/token (client_credentials, super-admin ClientApplication)
+  BB->>KC: passthrough
+  KC-->>AS: token {membership: super-admin}
+  AS->>BB: GET /admin/projects
+  BB->>PG: bigbook.project list
+  BB-->>AS: projects[]
+  AS->>BB: GET /fhir/R4/Patient  Bearer · X-Project: P
+  BB->>BB: super-admin? yes → partition = P (header ignored for all other tokens)
+  BB->>HAPI: AuthorizationInterceptor: admin bypass → allowAll
+  HAPI->>PG: SQL (partition P)
+  HAPI-->>AS: Bundle
+```
+
+Human attribution is absent in v0.1 (audited to the ClientApplication); v0.2 adds `X-Medplum-On-Behalf-Of` (BB-R-024).
+
+## 3. Module map
+
+| Module | Owns | Depends on | Glue share (v0.1 ≈ 4.8k of 5–10k) |
+|---|---|---|---|
+| `core/` | Tenant model (Project, ProjectMembership, invite, Keycloak org ↔ HAPI partition), AccessPolicy translator + parameter substitution, shared types | HAPI structures, Keycloak admin client | ≈2.4k (tenant 1.2k · policy 1.2k) |
+| `server/` | Spring Boot app: embedded HAPI JPA, interceptor registration, `/oauth2/*` passthrough + reshaped discovery/logout, `/auth/me`, `/admin/*`, `AccessPolicy` provider, subscription signature + AuditEvent hooks, `X-Project`, bootstrap | `core/`, HAPI JPA, Spring Security | ≈1.6k |
+| `client/` | `BigBookClient`, auth flows, typed CRUD/search/batch/binary, Spring Boot starter | HAPI generic client | ≈0.8k |
+| `bots/` | v0.2 — Camel bot runtime + starter | `core/` | 0 in v0.1 |
+| `deploy/` | `compose/lite.yml`, `compose/admin.yml`, `compose/full.yml`, Helm chart, `versions.yaml` | — | not Java; uncounted |
+| `app/lowcode/` | Appsmith app JSON, vendored AccessPolicy JSON schema, `SCREENS.md` | Big Book REST | uncounted |
+
+## 4. Boundaries — one row per brick
+
+| Brick | Keycloak | HAPI | Big Book |
+|---|---|---|---|
+| BB-R-001 Datastore | — | CRUD, history, batch/transaction, `$validate`, ref-integrity, UUID ids, no update-as-create (config) | partition identity interceptor |
+| BB-R-002 Search | — | all params, chaining, includes, `_filter`, paging | `_compartment=Project/*` → partition |
+| BB-R-003 GraphQL | — | `$graphql`, introspection toggle, limits | PRESHOW field hiding applies unchanged |
+| BB-R-004 Auth | login flows, OIDC grants, MFA, brokering, claims mappers, JWKS | — | `/oauth2/*` passthrough, discovery + logout reshape, `/auth/me`, JWT validation filter |
+| BB-R-005 Tenancy | organisations, users, confidential clients, required actions | partitions | Project/Membership/invite model, org↔partition map, super-admin bootstrap, `X-Project` |
+| BB-R-006 Access policies | — | AuthorizationInterceptor, SearchNarrowingInterceptor, FhirQueryRuleTester, hooks | AccessPolicy translator, hiddenFields, readonlyFields, params, defaults, denial log, `AccessPolicy` provider |
+| BB-R-007 Subscriptions | — | matching, rest-hook delivery, retry, interaction filter | author-policy re-check, X-Signature, AuditEvent per attempt, `$resend` |
+| BB-R-008 n8n | — | rest-hook source | recipe + example workflow (`full` only) |
+| BB-R-009 Binary | — | binary storage (`lite` DB, `full` MinIO) | — |
+| BB-R-010 Notifications | invite/reset/verify/MFA emails | — | Spring Mail config surface |
+| BB-R-011 Packaging | realm import | — | compose, Helm, profiles, bootstrap, health, config docs |
+| BB-R-012 Java SDK | — | generic client | `BigBookClient`, starter |
+| BB-R-013 Admin UI | (v0.2 OIDC via On-Behalf-Of) | — | Appsmith app JSON (`admin` overlay), `X-Project` |
+| BB-R-014 Wire-compat | — | paths, media types, ETag, status codes by config | `/auth/me`, OAuth path map; v0.2: Medplum admin types, OperationOutcome ids, 412/400 glue |
+| BB-R-015 Observability | — | `X-Request-ID` echo | JSON logs with request/project/user, actuator, OTel (`full`) |
+
+Rule: if a row's Big Book cell grows past what's listed, check HAPI's interceptor/settings surface first.
+
+## 5. Cross-cutting
+
+**Identity propagation (BB-R-015).** Inbound `X-Request-ID` is honoured (HAPI native) or generated at the servlet filter; project id resolves from the token `project` claim at partition identification; user id = token `sub`. All three are set in MDC before any interceptor runs and appear on every JSON log line. Subscription deliveries and their AuditEvents carry the originating request id. In `full`, the OTel trace id is added to the same MDC; Medplum's `X-Trace-Id` is v0.2 glue (ADR-003).
+
+**Config precedence.** Environment variables → Helm `values.yaml` / compose `.env` → defaults in `application.yml`. Every key in `docs/guides/config.md` with its default. Secrets never in values files: `lite` reads them from env or Keycloak client attributes; `full` from Vault.
+
+**Version pinning.** `deploy/versions.yaml` is the single source for every upstream (Postgres, Keycloak, HAPI, Appsmith, and all `full` images) and is consumed by compose, Helm values and the Java build properties. One upgrade cadence; the CI e2e smoke runs the pinned set on `lite` and `lite+admin`.
+
+## 6. Out of scope for this document
+
+Class design, table schemas, Helm chart internals, Appsmith widget layout, CI pipeline definition. Claude Code owns each per issue; ADRs capture anything that changes a decision above.

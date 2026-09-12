@@ -1,0 +1,3 @@
+# Offline Medplum docs snapshot and the scraper that builds it (tools/scrape_medplum_docs.py)
+docs/medplum-docs/
+tools/

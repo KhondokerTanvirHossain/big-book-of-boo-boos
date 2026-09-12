@@ -14,7 +14,7 @@ Reconstructed from the Architect's decision as folded into `docs/REQUIREMENTS.md
 
 ## Rationale
 
-- `lite` is four containers (BB-R-011.1). A or B adds a fifth on the request path of every FHIR call.
+- `lite` is three containers (BB-R-011.1, ADR-006). A or B adds a fourth on the request path of every FHIR call.
 - Medplum `AccessPolicy.criteria` is a FHIR search string. HAPI already evaluates FHIR search strings, both against the database (`SearchNarrowingInterceptor`) and in memory (`InMemoryResourceMatcher`). A or B would mean translating FHIR search semantics into a second policy language and keeping the two in sync.
 - Search narrowing must be pre-query so `_total` and paging are correct (issue #7 AC). Only HAPI can narrow the query; an external engine can only post-filter or duplicate the criteria.
 - HAPI's `AuthorizationInterceptor` rule model already covers interaction × resource type × compartment. The remainder is small and local.
