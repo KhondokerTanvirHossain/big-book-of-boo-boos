@@ -32,7 +32,7 @@ What a client can do at `/fhir/R4`:
 4. Batch (`type: batch`) and transaction (`type: transaction`) bundles, with internal (`urn:uuid`) and conditional references, `ifMatch` version checks, PATCH entries.
 5. `$validate` against base R4 and any loaded profile; `meta.profile` honoured; `Project.defaultProfile` (see BB-R-005) auto-applied when absent.
 6. Reference integrity on write (Medplum `checkReferencesOnWrite`) switchable per project.
-9. Server-assigned UUID ids only; `PUT /Type/<new-id>` (update-as-create) is rejected as in Medplum (ADR-003).
+9. Server-assigned UUID ids only; `PUT /Type/<new-id>` (update-as-create) is rejected as in Medplum (ADR-003): 404 for project users; super-admin may set ids (BB-R-005.7) and gets 200. Observed values in `docs/guides/medplum-parity.md`.
 7. Async batch bundles (`Prefer: respond-async` + job status) — **defer v0.2**.
 8. Patient `$match` / dedup pipeline — **non-goal** (workflow guide, not platform).
 
@@ -257,7 +257,7 @@ HL7v2 agent (`agent/`, `integration/hl7-interfacing`), terminology with Snowstor
 
 # v1.0
 
-App-grade Medplum compat (`@medplum/app` unmodified) — blocked on emulating the `Login` sign-in flow; Claude Code to confirm `@medplum/app` has no `signInWithRedirect` config path (if it does, moves to v0.2).
+App-grade Medplum compat (`@medplum/app` unmodified) — blocked on emulating the `Login` sign-in flow. Confirmed 2026-09-12 (issue #1): `@medplum/app` has no config path to `signInWithRedirect` or a direct OIDC redirect; even the `DomainConfiguration` external-IdP route runs through the `Login` protocol. Stays v1.0; see `docs/guides/medplum-parity.md`.
 
 # Non-goals (v0.x)
 

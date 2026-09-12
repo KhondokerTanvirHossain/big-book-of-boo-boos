@@ -1,7 +1,7 @@
 # ADR-004 Admin UI path
 
 Status: decided (2026-09-12)
-Decision: **Appsmith CE as a compose overlay in v0.1 (service-account UI); Vaadin Flow in v0.3, conditional; Medplum React app only if issue #1 makes app-grade compat a v0.2 item.**
+Decision: **Appsmith CE as a compose overlay in v0.1 (service-account UI); Vaadin Flow in v0.3; Medplum React app not before v1.0.** (Issue #1 resolved 2026-09-12: no config path in `@medplum/app`, so the Vaadin line stands.)
 Context: see `docs/BIGBOOK.md` → Open decisions; requirements unblocked by this: BB-R-013; consequences land in BB-R-005, BB-R-007, BB-R-011
 
 ## Options
@@ -16,8 +16,8 @@ Context: see `docs/BIGBOOK.md` → Open decisions; requirements unblocked by thi
 |---|---|---|
 | v0.1 | **Appsmith CE**, `deploy/compose/admin.yml` overlay, not part of the 10-minute `lite` install (+≤3 min documented separately) | **Service account**: one super-admin `ClientApplication`; the app selects the target project with an `X-Project` header. No per-user identity in the UI. |
 | v0.2 | Same overlay | Per-user OIDC sign-in and On-Behalf-Of (BB-R-004.6) so actions are attributed to the signed-in user |
-| v0.3 | **Vaadin Flow** proper admin UI — **conditional**: built only if issue #1 finds `@medplum/app` cannot be configured for external OIDC without patching | Per-user OIDC |
-| v0.2 / v1.0 | `@medplum/app` per ADR-003 app-grade C, if issue #1 finds a config path; then the Vaadin line is dropped | Medplum `Login` flow emulation |
+| v0.3 | **Vaadin Flow** proper admin UI — condition met: issue #1 found `@medplum/app` cannot be configured for external OIDC without patching (ADR-003 → Open) | Per-user OIDC |
+| v1.0 | `@medplum/app` per ADR-003 app-grade C | Medplum `Login` flow emulation |
 
 Build list for v0.1 = `app/lowcode/SCREENS.md` (11 screens, PO-owned). Every page calls only the endpoints listed for it there. Nothing more gets designed before code. Visual reference: the Medplum app screenshot pass in `docs/reference/medplum-app/` (issue #20).
 

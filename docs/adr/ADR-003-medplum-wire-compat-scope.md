@@ -34,3 +34,10 @@ Context: see `docs/BIGBOOK.md` → Open decisions; requirements unblocked by thi
 - v0.2 adds glue for OperationOutcome mapping, 409→412 on `If-Match`, 422→400 on validation, `X-Trace-Id` (BB-R-014 §6).
 - `Login`, `/auth/login|newuser|newproject|newpatient|profile|scope|mfa/*|changepassword|resetpassword|setpassword|verifyemail` stay non-goal through v0.x.
 - ADR-004 (admin UI path) may now assume wire-compat exists from v0.2 for the SDK and from v1.0 for the app.
+
+## Open
+
+Resolved by issue #1 on 2026-09-12 (research against `medplum-server` 5.1.37, source at `main` `fbc8e7b4`).
+
+1. **Can `@medplum/app` reach `signInWithRedirect` / external OIDC by configuration alone?** — **No.** The app's config surface is six env keys (`packages/app/src/config.ts`); none wires `authorizeUrl`/`tokenUrl`, and `packages/app` never calls `signInWithRedirect` or `signInWithExternalAuth`. The only external-IdP route is a server-side `DomainConfiguration`, and it still runs through `POST /auth/method`, `GET /auth/external`, the `Login` resource, `GET /auth/login/:id`, `POST /oauth2/token` and `GET /auth/me`. App-grade C therefore requires emulating the `Login` protocol and **stays v1.0**. Consequence for ADR-004: the v0.3 Vaadin Flow line stands.
+2. **Medplum edge-case status codes** — recorded in `docs/guides/medplum-parity.md`. Headline divergences from HAPI defaults: stale `If-Match` is 412 in Medplum vs 409 in HAPI; update-as-create is 200 for super-admin and 404 for everyone else in Medplum vs 201 in HAPI; Medplum sets `OperationOutcome.id` to a stable slug that `@medplum/core` helpers key on, HAPI sets none. All are v0.2 glue under BB-R-014.6; v0.1 needs only the HAPI config in #8.
