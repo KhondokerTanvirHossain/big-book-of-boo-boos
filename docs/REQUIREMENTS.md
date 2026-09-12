@@ -93,7 +93,7 @@ Fill: **glue** (tenant model) on Keycloak organisations + HAPI partitions · Ver
 5. **ClientApplication**: `POST /admin/projects/:id/client` creates a machine identity (Keycloak confidential client) with membership + policy. External IDs on identities (`external-ids`) — v0.1 as identifier on the profile resource.
 5a. Routes in (4)–(5) exist in v0.1 with Big Book payloads; byte-compatibility with Medplum's request/response JSON — **defer v0.2** (BB-R-014.3/4).
 6. **Project settings** (v0.1 subset): `checkReferencesOnWrite`, `defaultProfile`, `features[]`, `defaultPatientAccessPolicy`, `setting[]`/`secret[]` (secrets in Keycloak client attrs or env for `lite`; Vault in `full`), `rateLimit` (→ BB-R-023, v0.2).
-7. **Super-admin project**: server-wide view; only role that can create projects, override `id`/`meta`, read protected resources. Bootstrapped from env at first start (`BIGBOOK_ADMIN_EMAIL`/`_PASSWORD`).
+7. **Super-admin project**: server-wide view; only role that can create projects, override `id`/`meta`, read protected resources. Bootstrapped from env at first start (`BIGBOOK_ADMIN_EMAIL`/`_PASSWORD`). Super-admin tokens select the target partition with an `X-Project` header (ADR-004; ~30 glue lines).
 8. **Project linking** (shared read-only reference projects, `exportedResourceType`) — **defer v0.2** (HAPI multi-partition read).
 9. **Open patient registration** — **defer v0.2** (Keycloak self-registration + `defaultPatientAccessPolicy`).
 10. SCIM (`api/scim`) — **non-goal v0.x** (Keycloak has SCIM extensions; wire in v1 if asked).
@@ -102,7 +102,7 @@ Exit test: super-admin creates two projects; invites the same email to both, adm
 
 ## BB-R-006 Access policies
 Medplum ref: `access/` (index, access-policies, admin, multi-tenant-access-policy, ip-access-rules, user-configuration, binary-security-context, tenant-selector, smart-scopes)
-Fill: **glue** (policy adapter: Medplum-shaped `AccessPolicy` JSON → engine per ADR-001, enforced via HAPI `AuthorizationInterceptor`) · Version: v0.1 · Displaces: nothing · Status: blessed
+Fill: **glue** (ADR-001, decided 2026-09-12: no external engine — Medplum-shaped `AccessPolicy` resources translated at request time into HAPI `AuthorizationInterceptor` rules + `SearchNarrowingInterceptor`; field hiding, readonly restore, parameter substitution and subscription-side enforcement as Big Book interceptor hooks; ≈1.1–1.3k lines) · Version: v0.1 · Displaces: nothing · Status: blessed
 
 1. `AccessPolicy` resource with `resource[]` entries: `resourceType` (or `*`), `criteria` (search string; `:not`/`:missing` only, no chaining), `interaction[]` (create/read/update/delete/search/history/vread), `readonly`, `readonlyFields[]`, `hiddenFields[]`, `compartment`.
 2. Policies attach via `ProjectMembership.accessPolicy[]`; multiple policies OR-combine. `admin: true` bypasses.
@@ -115,6 +115,7 @@ Fill: **glue** (policy adapter: Medplum-shaped `AccessPolicy` JSON → engine pe
 9. Binary security context — **defer v0.2** (with BB-R-009 MinIO).
 10. SMART scopes → policy — **defer v0.2** (ADR-005).
 11. Emergency/temporary access patterns — docs only.
+12. `AccessPolicy` is readable/writable at `/fhir/R4/AccessPolicy` in Medplum JSON shape, partitioned per project (storage per ADR-001; same pattern reused for the other admin types in BB-R-014.3).
 
 Exit test: membership with `{resourceType: Observation, criteria: "subject=%patient", hiddenFields:[note]}` — the user reads only their own Observations, `note` is absent, PUT on another patient's Observation → 403, and an `AuditEvent` records the denial (AuditEvent detail fills in v0.2, denial log in v0.1).
 
@@ -124,7 +125,7 @@ Fill: **wire HAPI Subscriptions** (+ glue for Medplum extensions where cheap) ·
 
 1. R4 `Subscription` with `criteria` (search string) and `channel.type = rest-hook`; fires on create/update/delete matching the criteria, scoped to the project.
 2. Interaction filter extension (`create`-only / `update`-only / `delete`) — HAPI supports; map the Medplum extension URL.
-3. Retry with backoff; configurable max attempts; failures visible.
+3. Retry with backoff; configurable max attempts; delivery status visible as one `AuditEvent` per delivery attempt, searchable per Subscription (ADR-004; BALP/redaction stays BB-R-018 v0.2).
 4. Signature header (`X-Signature`, HMAC of body with a per-subscription secret) — **glue** if HAPI lacks it; required for n8n/bot trust.
 5. `$resend` operation to re-fire a resource's subscriptions — **glue** (thin).
 6. Expression-based criteria (FHIRPath `%previous` vs `%current`) — HAPI `in-memory` matcher gap; **defer v0.2**.
@@ -169,7 +170,7 @@ Exit test: invite from BB-R-005 lands in the mail catcher with a working set-pas
 Medplum ref: `self-hosting/` (index, running-full-medplum-stack-in-docker, install-from-scratch, install-on-kubernetes, server-config, setting-configuration, super-admin-guide, super-admin-cli, upgrading-server, disaster-recovery, monitoring, opentelemetry)
 Fill: **glue** (Helm chart, compose, profiles, docs) · Version: v0.1 · Status: blessed
 
-1. `docker compose up` with the `lite` file starts Postgres, HAPI, Keycloak, Big Book; admin UI reachable; ≤10 min on a laptop with a cold image cache; two commands max (mirrors Medplum's `curl … && docker compose up -d`).
+1. `docker compose up` with the `lite` file starts Postgres, HAPI, Keycloak, Big Book; ≤10 min on a laptop with a cold image cache; two commands max (mirrors Medplum's `curl … && docker compose up -d`). Admin UI reachable with the `admin` overlay (ADR-004; documented +3 min, outside the `lite` timer).
 2. `helm install bigbook` with `profile: lite` produces the same stack on any Kubernetes; `profile: full` adds OpenSearch, MinIO, n8n, Traefik, Grafana stack, Vault, Snowstorm (per version).
 3. Configuration by env/values only; every key documented in one table (`docs/guides/config.md`), with defaults; secrets never in values files.
 4. First-boot bootstrap: realm, super-admin project, super-admin user, default policies; idempotent on restart.
@@ -196,9 +197,9 @@ Exit test: Baymax's patient read/write path runs on the SDK alone — no raw HTT
 
 ## BB-R-013 Admin UI (low-code)
 Medplum ref: `app/` (index, app-introduction, sign-in-page, admin-page, apps-tab, invite)
-Fill: **wire Appsmith/ToolJet** on `/fhir/R4` + `/admin` (ADR-004 decides the long-term path) · Version: v0.1 (low-code) → v0.3 (proper) · Status: blessed
+Fill: **wire Appsmith CE** on `/fhir/R4` + `/admin`, `admin` compose overlay, app JSON in `app/lowcode/` (ADR-004, decided 2026-09-12) · Version: v0.1 (low-code) → v0.3 (Vaadin Flow in the Big Book server, only if the `@medplum/app` redirect-sign-in check is negative) · Status: blessed
 
-1. Sign-in via Keycloak (OIDC), project switcher for multi-project users.
+1. v0.1: sign-in with Appsmith accounts; Big Book calls via a super-admin `ClientApplication`; project switcher = `GET /admin/projects` + `X-Project` header. Per-user Keycloak OIDC and human attribution (`X-Medplum-On-Behalf-Of`) — **defer v0.2** (BB-R-024). Screen inventory per ADR-004 is the build list.
 2. Resource browser: list any type with search bar, detail view, JSON editor (create/update), history tab, delete.
 3. Admin page: project details/settings, Users (list, invite, edit membership/policy/admin), Patients, Clients (create → shows secret once), Secrets, Bots (**v0.2**), Sites (**non-goal**).
 4. AccessPolicy editor (JSON with schema validation) and assignment.
@@ -244,7 +245,7 @@ Exit test: one `curl` to `/fhir/R4/Patient` produces one log line carrying proje
 | BB-R-021 | Full-text search (`full`) | wire OpenSearch | `search/` |
 | BB-R-022 | SMART App Launch scopes + launch context | wire Keycloak ext (ADR-005) | `integration/smart-app-launch`, `access/smart-scopes` |
 | BB-R-023 | Rate limits per project/user | wire Traefik | `rate-limits` |
-| BB-R-024 | On-Behalf-Of, direct external auth, open patient registration, project linking | wire Keycloak / HAPI | see v0.1 deferrals |
+| BB-R-024 | On-Behalf-Of (incl. `X-Medplum-On-Behalf-Of` for admin clients), direct external auth, open patient registration, project linking | wire Keycloak / HAPI | see v0.1 deferrals |
 | BB-R-025 | Subscription extras (WebSocket, expression criteria, AuditEvent destination, server-scoped) | wire/glue | `subscriptions/` |
 | BB-R-026 | Per-project SMTP + branded emails | wire Spring Mail | `user-management/custom-emails` |
 | BB-R-027 | Presigned URLs + binary security context (MinIO) | wire MinIO | `self-hosting/presigned-urls` |

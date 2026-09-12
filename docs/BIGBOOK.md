@@ -38,7 +38,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 | Validation / IGs | HAPI validator; BD IG authored in FSH | decided |
 | HL7v2 / agent | HAPI HL7v2 + Camel HL7 | v0.3 |
 | Notifications | Spring Mail; Novu if channels grow | decided |
-| Admin UI | Appsmith/ToolJet on the REST API (v0.1); Medplum React app if wire-compat; Vaadin if all-Java is mandated | open |
+| Admin UI | Appsmith CE overlay (v0.1); Vaadin Flow (v0.3, conditional) | decided |
 | Gateway / TLS | Traefik | decided |
 | Observability | OpenTelemetry → Grafana stack | decided |
 | Secrets | Vault | decided |
@@ -101,7 +101,7 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 - ADR-001 Policy engine: Cerbos vs OPA.
 - ADR-002 Event bus: Kafka vs RabbitMQ vs none in `lite`.
 - ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
-- ADR-004 Admin UI path.
+- ADR-004 Admin UI path — decided: Appsmith CE overlay v0.1 (service-account); Vaadin Flow v0.3, conditional on issue #1.
 - ADR-005 SMART-on-FHIR Keycloak extension.
 
 ## How the three surfaces work
