@@ -26,7 +26,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 | Full-text search | HAPI + OpenSearch | decided, `full` profile only |
 | Identity, OIDC/OAuth2, users, MFA | Keycloak | decided |
 | SMART-on-FHIR scopes | Keycloak extension (pick a maintained one) | open |
-| Access policies | Cerbos or OPA via HAPI `AuthorizationInterceptor` | open — pick one in ADR |
+| Access policies | Medplum-shaped `AccessPolicy` → HAPI `AuthorizationInterceptor` + `SearchNarrowingInterceptor` rules, Big Book hooks; no external engine | decided |
 | Multi-tenancy | HAPI partitioning keyed on Keycloak organisation | decided |
 | Consent | HAPI `ConsentInterceptor` | decided |
 | Bots (dev-authored, in-JVM) | Apache Camel routes on Spring Boot | decided |
@@ -47,7 +47,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 ## What we write (and nothing else)
 
 1. **Tenant model** — Keycloak org ↔ HAPI partition mapping, project membership, invitations.
-2. **Policy adapter** — HAPI interceptor → policy engine, Medplum-shaped `AccessPolicy` JSON.
+2. **Policy adapter** — Medplum-shaped `AccessPolicy` JSON → HAPI interceptor rules + hooks (ADR-001).
 3. **Bot SDK** — Spring Boot starter so a bot is one annotated class on a Camel route.
 4. **Java client SDK** — auth flows and typed conveniences over the HAPI generic client.
 5. **Packaging** — Helm chart, compose file, profiles (`lite`, `full`), install docs.
@@ -98,7 +98,7 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 
 ## Open decisions (resolve via ADR)
 
-- ADR-001 Policy engine: Cerbos vs OPA.
+- ADR-001 Policy engine — decided: no external engine; `AccessPolicy` translated to HAPI interceptor rules + Big Book hooks (Cerbos/OPA rejected).
 - ADR-002 Event bus: Kafka vs RabbitMQ vs none in `lite`.
 - ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
 - ADR-004 Admin UI path — decided: Appsmith CE overlay v0.1 (service-account); Vaadin Flow v0.3 (issue #1 closed the `@medplum/app` path).
