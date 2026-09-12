@@ -100,7 +100,7 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 
 - ADR-001 Policy engine: Cerbos vs OPA.
 - ADR-002 Event bus: Kafka vs RabbitMQ vs none in `lite`.
-- ADR-003 Medplum wire-compatibility scope (FHIR + OAuth only, or admin routes too).
+- ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
 - ADR-004 Admin UI path.
 - ADR-005 SMART-on-FHIR Keycloak extension.
 

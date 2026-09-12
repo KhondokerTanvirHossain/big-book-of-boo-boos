@@ -7,5 +7,5 @@ Context: see `docs/BIGBOOK.md` → Open decisions; requirements blocked on this:
 ## Options
 
 - Appsmith/ToolJet on the REST API (v0.1)
-- Medplum React app, if ADR-003 gives wire-compat
+- Medplum React app — requires app-grade C, which ADR-003 schedules for v1.0; not available for v0.x
 - Vaadin (all-Java)
