@@ -42,7 +42,7 @@ A per-membership rule cache holds the translated rules; it is invalidated when a
 |---|---|---|
 | `SERVER_INCOMING_REQUEST_POST_PROCESSED` | `PolicyContextInterceptor` | Resolves membership, substitutes parameters, builds or fetches cached rules, registers them for this request. Runs before HAPI's own `AuthorizationInterceptor` and `SearchNarrowingInterceptor`. |
 | `STORAGE_PRESTORAGE_RESOURCE_CREATED` / `_UPDATED` / `_DELETED` | `WriteCriteriaHook` | Evaluates `criteria` against the incoming (and, for update/delete, existing) resource with `InMemoryResourceMatcher`; the rule model cannot inspect a request body. Deny → 403. |
-| `STORAGE_PRESTORAGE_RESOURCE_UPDATED` | `ReadonlyFieldsHook` | Compares `readonlyFields[]` between existing and incoming versions. See Open 5 for reject vs restore. |
+| `STORAGE_PRESTORAGE_RESOURCE_UPDATED` | `ReadonlyFieldsHook` | Restores every `readonlyFields[]` value from the existing version into the incoming one before storage; the PUT succeeds and the response body carries the restored values (Medplum behaviour, wire-compat tiebreaker). |
 | `STORAGE_PRESHOW_RESOURCES` | `HiddenFieldsHook` | Strips `hiddenFields[]` from every resource returned by read, vread, search, `_history`, `$graphql` (incl. nested references — Open 3) and subscription payloads. |
 | `SUBSCRIPTION_BEFORE_DELIVERY` | `SubscriptionPolicyHook` | Evaluates the subscription owner's membership policies against the matched resource; skips delivery on deny (issue #7 AC). |
 | `SERVER_HANDLE_EXCEPTION` | `DenialLogHook` | Emits the structured denial log line for every 403 raised by the path above. |
@@ -69,4 +69,4 @@ Verify on the pinned HAPI version before writing the translator (issue #7 "verif
 2. `SearchNarrowingInterceptor` accepts arbitrary-query narrowing, not only compartments.
 3. `STORAGE_PRESHOW_RESOURCES` fires for GraphQL nested reference resolution.
 4. HAPI JPA accepts a custom `@ResourceDef` type cleanly — if yes, `AccessPolicy` in JPA; if not, Big Book table + `IResourceProvider`.
-5. **Readonly fields: reject or restore?** BB-R-006 fill line says "readonly restore" (Medplum silently restores the original values); issue #7 AC says a changed readonly field is rejected with 403 and an `OperationOutcome` naming the field. PO to pick one; the hook is the same either way.
+5. ~~Readonly fields: reject or restore?~~ **Resolved 2026-09-12: restore.** Medplum silently restores the original values and wire-compat is the tiebreaker. Issue #7 AC aligned; BB-R-006 fill line stands.
