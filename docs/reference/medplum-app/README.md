@@ -23,3 +23,15 @@ Capture rules: 1440 px wide, light theme, one PNG per line below, filename = slu
 17. Subscription list and one Subscription detail
 18. Super Admin page (BB-R-005.7 reference)
 19. Security page (MFA / sessions — BB-R-004 reference)
+
+## Capture record (2026-09-12, issue #20)
+
+Captured from a local `docker-compose.full-stack.yml` stack, not `app.medplum.com` (no hosted credentials in the session): server `5.1.37-a9b62fb`, app `5.1.37-2436608`. Seeded super-admin account; data seeded so lists are non-empty. Files are `NN-<slug>.png`, 1440 px wide, light theme; three are two states stitched vertically because the line asks for both. The stack was torn down afterwards; every id and secret visible in the shots is ephemeral.
+
+Where the app differed from the line above:
+
+- 04 — `subject.name=` chaining errors in this version; captured `patient.name=Simpson&_include=Observation:subject`. The list shows no search-string bar; the `_include`d Patient appears as a row.
+- 09 — no Delete tab; deletion is Edit → More actions → Delete, which opens `/Patient/:id/delete` with an inline confirmation.
+- 13 — `/admin/patients` redirects to `/admin/users`; captured with the Patient profile-type filter.
+- 14 — no secret dialog; creation shows "Client created", the secret is revealed on the ClientApplication Details tab via "Show secret". Both states stitched.
+- 15 — one Bot created via the admin API so the list is non-empty.
