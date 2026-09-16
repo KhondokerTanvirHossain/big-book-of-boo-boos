@@ -32,7 +32,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 | Bots (dev-authored, in-JVM) | Apache Camel routes on Spring Boot | decided |
 | Automations (ops-authored, low-code) | n8n via Subscription rest-hooks | decided |
 | Durable workflows | Temporal / Camunda 8 | deferred — not before v0.3 |
-| Event bus | none — Postgres-backed delivery table + Spring scheduler in the Big Book JVM (ADR-002); revisit only for multi-JVM WebSocket subscriptions | decided |
+| Event bus | none (Postgres delivery table); revisit per ADR-002 triggers | decided |
 | Binary storage | MinIO (S3 API) | decided |
 | Terminology | HAPI terminology (`$expand`, `$lookup`, `$validate-code` from v0.1/v0.2 — HAPI's own tables serve LOINC/RxNorm/ICD-10/base R4); Snowstorm for **SNOMED CT only** | decided; Snowstorm `full`, v0.3 |
 | Validation / IGs | HAPI validator; BD IG authored in FSH | decided |
@@ -102,7 +102,7 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 ## Open decisions (resolve via ADR)
 
 - ADR-001 Policy engine — decided: no external engine; `AccessPolicy` translated to HAPI interceptor rules + Big Book hooks (Cerbos/OPA rejected).
-- ADR-002 Event bus — decided (2026-09-17): none, both profiles, v0.1–v0.2; Postgres-backed delivery table + Spring scheduler. Rationale text from the Architect on go.
+- ADR-002 Event bus — decided (2026-09-17): none, both profiles, v0.1–v0.2. Postgres delivery table polled in the Big Book JVM; cron on a DB-backed lock; bots in-process. Two verify-first items on issue #12.
 - ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
 - ADR-004 Admin UI path — decided: Appsmith CE overlay v0.1 (service-account); Vaadin Flow v0.3 (issue #1 closed the `@medplum/app` path).
 - ADR-005 SMART-on-FHIR Keycloak extension.

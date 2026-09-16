@@ -139,11 +139,14 @@ sequenceDiagram
   end
 ```
 
-| Column | `subscription_delivery` |
+| Column | `bigbook.subscription_delivery` (ADR-002) |
 |---|---|
 | keys | `id`, `subscription_id`, `project_id` |
 | what | `resource_type`, `resource_id`, `version_id`, `interaction` |
-| state | `status` (pending/done/failed), `attempt`, `next_attempt_at`, `last_error`, `consecutive_failures` (auto-disable, v0.2) |
+| state | `status` (pending/done/failed), `attempt`, `next_attempt_at`, `last_error` |
+| auto-disable (v0.2) | `consecutive_failures`, `first_failure_at` — the counter Medplum keeps in a Redis sorted set |
+
+Verify first on #12 (ADR-002 Open): the pinned HAPI's hook order must let this insert **replace** `SubscriptionDeliveryQueue` rather than run beside it (a "no" is a double-delivery bug), and HAPI's rest-hook delivery must be drivable from the poller so the HTTP client, headers and interaction filter stay HAPI's.
 
 Guarantees, stated (BB-R-007.11): at-least-once, unordered; receivers dedupe on (subscription, resource id, versionId). Survives restart; a second JVM in `full` shares the table safely via `SKIP LOCKED`. AuditEvent-per-attempt is BB-R-007.3, blessed (ADR-004 consequence). Retry numbers are Medplum's, pinned (D54). `$resend` re-evaluates criteria and inserts a fresh row.
 
