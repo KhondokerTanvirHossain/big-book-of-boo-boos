@@ -522,7 +522,7 @@ Ordered by blast radius. Cross-references Area 1's D3/D4, which already flag the
 
 > Source snapshot: `medplum/medplum` `main` @ `fbc8e7b4b` (2026-09-11, server 5.1.x). Docs snapshot: `docs/medplum-docs/` scraped 2026-09-12. Big Book @ `4a94f31`.
 > `Source` paths are relative to `packages/server/src` unless prefixed; `core/` = `packages/core/src`, `router/` = `packages/fhir-router/src`, `client.ts` = `packages/core/src/client.ts`.
-> Conventions per `MEDPLUM-INVENTORY.md` "Conventions". Fate `verify on pinned HAPI` appended wherever HAPI's support is uncertain — per BB-R-002/BB-R-003 ("measure the HAPI gap"), those are measurements, not guesses.
+> Conventions per `README.md` "Conventions". Fate `verify on pinned HAPI` appended wherever HAPI's support is uncertain — per BB-R-002/BB-R-003 ("measure the HAPI gap"), those are measurements, not guesses.
 
 **Reading note on Area 1 dependency:** access-policy narrowing of search is *not* re-derived here. Area 1 established that `AccessPolicy.resource[].criteria` is parsed as a search string and compiled into the same SQL `WHERE` expression tree as a user filter (`repo.ts:1856-1924`); rows SRCH-058/SRCH-059 record only how that attaches to the search pipeline.
 

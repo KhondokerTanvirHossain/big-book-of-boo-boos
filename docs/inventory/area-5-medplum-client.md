@@ -9,7 +9,7 @@
 
 Source snapshot: medplum `packages/core/src` at repo `main` (client.ts 4993 lines, read in full). `Source` paths in this area are relative to `packages/core/src` unless stated. BB-R mapping is against REQUIREMENTS.md / ADR-003 as of big-book `a1b9f49`.
 
-Conventions follow MEDPLUM-INVENTORY.md §Conventions. Two extra column meanings for this area:
+Conventions follow README.md §Conventions. Two extra column meanings for this area:
 
 - **Server contract it depends on** — the definition of *SDK-grade C*: what Big Book must return for this method to work against `@medplum/core` unpatched. "none beyond FHIR R4" means the method needs nothing Medplum-specific.
 - **Java SDK disposition** — `port` (v0.1 BB-R-012), `port v0.2`, `skip (reason)`, `n/a local helper`.
