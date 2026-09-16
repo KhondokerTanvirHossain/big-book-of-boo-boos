@@ -32,9 +32,9 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 | Bots (dev-authored, in-JVM) | Apache Camel routes on Spring Boot | decided |
 | Automations (ops-authored, low-code) | n8n via Subscription rest-hooks | decided |
 | Durable workflows | Temporal / Camunda 8 | deferred — not before v0.3 |
-| Event bus | Kafka or RabbitMQ | open |
+| Event bus | none — Postgres-backed delivery table + Spring scheduler in the Big Book JVM (ADR-002); revisit only for multi-JVM WebSocket subscriptions | decided |
 | Binary storage | MinIO (S3 API) | decided |
-| Terminology | HAPI terminology + Snowstorm | Snowstorm `full` only |
+| Terminology | HAPI terminology (`$expand`, `$lookup`, `$validate-code` from v0.1/v0.2 — HAPI's own tables serve LOINC/RxNorm/ICD-10/base R4); Snowstorm for **SNOMED CT only** | decided; Snowstorm `full`, v0.3 |
 | Validation / IGs | HAPI validator; BD IG authored in FSH | decided |
 | HL7v2 / agent | HAPI HL7v2 + Camel HL7 | v0.3 |
 | Notifications | Spring Mail; Novu if channels grow | decided |
@@ -54,6 +54,8 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 
 Target: 5–10k lines. If a feature needs more than that, the answer is a third-party component, not code.
 
+**v0.1 glue tally (reconciled 2026-09-17, `docs/inventory/`): ≈5.1k lines.** `core/` ≈2.5k (tenant model 1.2k · policy adapter 1.3k incl. two-phase write check and criteria validator), `server/` ≈1.8k (OAuth passthrough + reshape, `/auth/me`, admin routes, subscription delivery table + poller + signature + AuditEvent ≈150, outbound allow-list ≈40, GraphQL limits ≈50, `X-Project`, bootstrap), `client/` ≈0.8k. Known v0.2 additions from the inventory: token-response wrapper + mappers, extended-meta interceptor, OperationOutcome slug mapping and the eight T29 alignments, `$export` poll aliasing ≈200, no-op PUT 304 ≈40, CLI Basic-auth filter ≈80, token-exchange glue ≈150 (D9, `full`). Detail per module in `ARCHITECTURE.md` §3.
+
 ## Non-goals
 
 - Reimplementing any FHIR server function HAPI already has.
@@ -66,8 +68,9 @@ Target: 5–10k lines. If a feature needs more than that, the answer is a third-
 - **Reuse first.** Before writing code, prove no maintained component does it.
 - **`lite` must work in 10 minutes on a laptop.** Three containers: Postgres + Keycloak + Big Book (HAPI JPA embedded, ADR-006), nothing else. Everything in `full` is optional and must degrade cleanly.
 - **Wire-compatibility is a growth hack.** Match Medplum's FHIR and OAuth endpoints where it costs nothing; never match its internals.
+- **Contract, not defects.** We match Medplum's wire *contract* — paths, payload shapes, status codes, claims, headers — not its bugs. Where the inventory found Medplum behaving incorrectly (transactions silently downgraded to batches, a policy filter that fails open, an in-memory matcher that inverts `:not-in`, quantity search that ignores units, page links that drop `_summary`, a rest-hook policy check that is a no-op), Big Book does the correct thing and records the divergence in `docs/guides/medplum-parity.md` so nobody "fixes" it back. Bug-compatibility is never a requirement; a divergence is only wrong if it breaks a real `@medplum/core` call path.
 - **Pin everything.** One upgrade cadence for all upstreams; e2e smoke test runs the full stack in CI.
-- **Docs live here.** ADRs in `docs/adr/`, decisions in this file. No context outside the repo.
+- **Docs live here.** ADRs in `docs/adr/`, decisions in this file. No context outside the repo. The Medplum capability inventory (`docs/inventory/`, frozen at `fbc8e7b4b`) is the evidence behind REQUIREMENTS.md; re-run it, don't edit it.
 - **Dogfood.** Niramoy or Baymax runs each release before it's tagged.
 
 ## Repo layout
@@ -99,7 +102,7 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 ## Open decisions (resolve via ADR)
 
 - ADR-001 Policy engine — decided: no external engine; `AccessPolicy` translated to HAPI interceptor rules + Big Book hooks (Cerbos/OPA rejected).
-- ADR-002 Event bus: Kafka vs RabbitMQ vs none in `lite`.
+- ADR-002 Event bus — decided (2026-09-17): none, both profiles, v0.1–v0.2; Postgres-backed delivery table + Spring scheduler. Rationale text from the Architect on go.
 - ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
 - ADR-004 Admin UI path — decided: Appsmith CE overlay v0.1 (service-account); Vaadin Flow v0.3 (issue #1 closed the `@medplum/app` path).
 - ADR-005 SMART-on-FHIR Keycloak extension.

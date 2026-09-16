@@ -1,6 +1,6 @@
 # ADR-004 Admin UI path
 
-Status: decided (2026-09-12)
+Status: decided (2026-09-12), amended (2026-09-17, inventory reconcile — D1, D2, D5, D43)
 Decision: **Appsmith CE as a compose overlay in v0.1 (service-account UI); Vaadin Flow in v0.3; Medplum React app not before v1.0.** (Issue #1 resolved 2026-09-12: no config path in `@medplum/app`, so the Vaadin line stands.)
 Context: see `docs/BIGBOOK.md` → Open decisions; requirements unblocked by this: BB-R-013; consequences land in BB-R-005, BB-R-007, BB-R-011
 
@@ -14,7 +14,7 @@ Context: see `docs/BIGBOOK.md` → Open decisions; requirements unblocked by thi
 
 | Version | Admin UI | Sign-in model |
 |---|---|---|
-| v0.1 | **Appsmith CE**, `deploy/compose/admin.yml` overlay, not part of the 10-minute `lite` install (+≤3 min documented separately) | **Service account**: one super-admin `ClientApplication`; the app selects the target project with an `X-Project` header. No per-user identity in the UI. |
+| v0.1 | **Appsmith CE**, `deploy/compose/admin.yml` overlay, not part of the 10-minute `lite` install (+≤3 min documented separately) | **Service account**: one super-admin `ClientApplication`; the app selects the target project with the optional `X-Project` header (BB-R-005.11). No per-user identity in the UI. If Appsmith calls Big Book from the browser, CORS echoes the origin with credentials allowed (D43). |
 | v0.2 | Same overlay | Per-user OIDC sign-in and On-Behalf-Of (BB-R-004.6) so actions are attributed to the signed-in user |
 | v0.3 | **Vaadin Flow** proper admin UI — condition met: issue #1 found `@medplum/app` cannot be configured for external OIDC without patching (ADR-003 → Open) | Per-user OIDC |
 | v1.0 | `@medplum/app` per ADR-003 app-grade C | Medplum `Login` flow emulation |
@@ -23,12 +23,13 @@ Build list for v0.1 = `app/lowcode/SCREENS.md` (11 screens, PO-owned). Every pag
 
 ## Screen inventory (v0.1)
 
-See `app/lowcode/SCREENS.md`. Gap the inventory exposed: S5/S6/S8/S9 call admin routes that BB-R-014.4 names but issue #6 did not define — `GET /admin/projects`, `GET/PUT /admin/projects/:id`, `GET /admin/projects/:id/members[?profileType=]`, `PUT /admin/projects/:id/members/:mid`. Added to #6.
+See `app/lowcode/SCREENS.md`. Gap the screen inventory exposed: S5/S6/S8/S9 call admin routes that issue #6 did not define — `GET /admin/projects`, `GET/PUT /admin/projects/:id`, `GET /admin/projects/:id/members[?profileType=]`, `PUT /admin/projects/:id/members/:mid`. Added to #6. **Amended 2026-09-17 (D2):** none of the four exists in Medplum (it lists projects via `/auth/me` + FHIR `Project` search, edits a project via `POST …/settings|secrets|sites`, lists members via FHIR `ProjectMembership?profile-type=`, and updates a member via `POST …/members/:mid`). They are **BB-only** routes (BB-R-005.12), kept for Appsmith, never documented as Medplum-compatible; BB-R-014.4 now lists Medplum's real spellings as the v0.2 compat surface.
 
 ## Consequences (folded into issues)
 
 - **#2** — `lite` stays three containers (ADR-006); "admin UI reachable" leaves the install AC. `deploy/compose/admin.yml` overlay documented with its own +3 min note.
-- **#4** — `X-Project` header selects the target partition for super-admin tokens only; a non-super-admin sending it gets 403; a super-admin write without it gets 400.
+- **#4** — `X-Project` header selects the target partition for super-admin tokens only; a non-super-admin sending it gets 403. **Amended 2026-09-17 (D1):** the header is a Big Book extension and is **optional, never required** — Medplum has no such header and `@medplum/core` never sends it; where a route has a `:projectId` path segment the path wins; a super-admin call without either acts on the super-admin's own project (Medplum behaviour). The earlier "a super-admin write without it gets 400" is withdrawn.
+- **#6 / #16** — `ClientApplication.secret` is **retrievable** by project admins on every read of the resource, as in Medplum and Keycloak (D5); the Clients screen shows it on the detail page. BB-R-013.3's "shows secret once" is withdrawn.
 - **#12** — one `AuditEvent` per delivery attempt (outcome, attempt number, HTTP status), searchable by Subscription reference, minimal fields, no BALP. The Subscriptions screen reads it.
 - **#16** — rewritten: Appsmith CE overlay, service-account model, verify-first items below, ≤3 min overlay budget, no Business/Enterprise features.
 - **#1** — unchanged; its task 1 decides whether the v0.3 Vaadin line exists.

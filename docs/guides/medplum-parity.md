@@ -35,3 +35,27 @@ Also observed:
 External IdP login through the stock `SignInForm` exists via a server-side `DomainConfiguration` resource, but the Medplum server still brokers it: `POST /auth/method` → IdP → `GET /auth/external` (mints a `Login`) → `/signin?login=<id>` → `GET /auth/login/<id>` → `POST /oauth2/token` → `GET /auth/me`. So app-grade compat requires emulating the `Login` protocol regardless. Stays **v1.0** (ADR-003).
 
 First load with empty storage makes no auth calls at all: it fires a batched `POST /fhir/R4/$graphql` search, gets 401, and redirects to `/signin`. No `/.well-known/openid-configuration` or `/oauth2/authorize` is ever requested.
+
+## Deliberate divergences (inventory reconcile, 2026-09-17)
+
+Recorded so nobody "fixes" Big Book back to Medplum's behaviour. Principle: BIGBOOK.md "contract, not defects". Source: `docs/inventory/` (frozen at `fbc8e7b4b`), decision numbers as in REQUIREMENTS.md.
+
+| # | Where | Medplum (observed in source) | Big Book |
+|---|---|---|---|
+| D11 | Transactions | Atomic only when the project has the `transaction-bundles` feature; otherwise a `transaction` bundle silently runs as a batch and still returns `transaction-response`. Caps: 50 updates, 8 entries when any conditional op is present (`fhir-router/batch.ts:873-875, 29-30`). | Always atomic; no feature gate; no caps. |
+| D12 | No-op PUT | Byte-identical PUT returns the existing resource, no new version; router surfaces 304; `@medplum/core.upsertResource` branches on it (`client.ts:2425-2429`). | v0.1 versions unconditionally; 304 path is v0.2 glue (BB-R-014.3). |
+| D14 | Policy filter on malformed criteria | `addAccessPolicyFilters` `return`s out of the loop, dropping every remaining restriction for the request — fails open (`repo.ts:1901`). | Fails closed: 403 + log. |
+| D15 | Criteria the matcher cannot evaluate | `matchesSearchRequest` returns `false` for chained/`_has`/`_filter`/number/quantity, ignores `:exact`, degrades `:in`/`:not-in`/`:above`/`:below`/`:text` to equality (`:not-in` inverts), compares dates lexicographically. Used for `AccessPolicy` write checks and `Subscription.criteria`. | Rejected with 400 when the `AccessPolicy`/`Subscription` is written (shared validator; evaluable subset per V5). |
+| D16 | Cross-project references | `checkReferencesOnWrite` off by default; a resource may store a reference into another project. | `enforce_referential_integrity_on_write` on by default; per-project switch kept. |
+| D17 | Paging | Cursor `2-<epochMillis>-<uuids>` (docs call it opaque), engaged under four simultaneous conditions; page links re-serialised, dropping `_summary`/`_format`/`_pretty` (`search.ts:568-576, 664-671`). | Offset paging byte-compatible; links echo caller params; cursor token not wire-compatible (HAPI paging cache). |
+| D18 | GraphQL limits | `graphqlMaxDepth` and the query-cost rule enforce nothing — `reportError` calls commented out (`graphql.ts:542-549, 639-643`); `graphql-introspection` project feature read by no server code. | Depth/cost limits enforcing; introspection toggle server-wide (v0.1). |
+| D19 | Quantity / number search | Quantity discards system and code (`search.ts:1491`); number has no precision range (`range-column.ts:279` TODO). | HAPI semantics: units matched, precision ranges applied. Fewer results than Medplum. |
+| D34 | Bootstrap | Super-admin password silently defaults to `medplum_admin` (`seed.ts:63-64`); `registerEnabled` defaults on; shipped config `allowedOrigins: "*"`. | No default password (generated, printed once); registration off; CORS echoes origin with credentials. |
+| D57 | Rest-hook policy check | `satisfiesAccessPolicy` builds the author's policy then `return channel.type === 'websocket' ? satisfied : true` (`workers/subscription.ts:236-308`). | Enforced for every channel from v0.1. |
+| T30 | System repository | `getSystemRepo()` obtainable from any repository, no audit trail (`repo.ts`). | Internal, non-token-reachable, every elevation logged. |
+| T18/T20/T21 | Supersets | No type/system `_history`; `$validate` type-level only, bare body, no `mode`/`profile`; `$graphql` POST system-level only. | HAPI's type/system history, instance `$validate` with parameters, instance/GET `$graphql` all kept. |
+| T23/T24/T27 | Supersets | `:above/:below/:in/:not-in/:of-type` parsed then 400; `_include=*` 400; `SearchParameter` resources loaded from static bundles at boot. | HAPI modifiers, `_include=*`, runtime `SearchParameter` + `$reindex` (V4). |
+| T28 | 422 | Effectively unreachable: only `business-rule` maps to 422; `badRequest`/`validationError` emit no `id` and land on 400. | Same as Medplum for compat (v0.2 glue maps HAPI's validation 422 → 400, keeps 422 for `business-rule`). |
+| D28 | `$export` async | Ignores `Prefer: respond-async`; unconditionally async; poll URL `/fhir/R4/bulkdata/export/:id`, manifest `requiresAccessToken: false` hardcoded. | Bulk Data IG conformant (HAPI); Medplum poll URLs aliased for SDK-grade (v0.2). |
+| T46 | `$validate` body | `validateResource` POSTs a bare resource, not `Parameters`. | Accepted as-is (HAPI takes both). Do not "fix" the SDK path. |
+| T52 | `_offset` on `_history` | `readHistory` sends `_offset`, not `_getpagesoffset`. | v0.2 alias (D45). |
