@@ -59,7 +59,7 @@ Fill: **wire HAPI** · Version: v0.1 · Displaces: nothing · Status: blessed
 8. Full-text `_text`/`_content` — **new capability**, not a deferral of parity: Medplum never implemented them (T22). v0.2, `full` profile, HAPI + OpenSearch (BB-R-021).
 9. Custom `SearchParameter` resources registered at runtime with `$reindex` — a free gain over Medplum, which loads them from static bundles at boot and ignores a POSTed `SearchParameter` (T27). **V4**.
 
-Verify: **V2** `_filter` coverage; **V4** runtime `SearchParameter`; **V6** HAPI `_count` cap, default `_total` mode, page-link shape; **V9** `SUBSETTED` tagging on `_summary`/`_elements` (D44).
+Verify: **V1** (**blocking**) `SearchNarrowingInterceptor` narrows `_include`/`_revinclude` sub-queries — configured here, enforced by BB-R-006; **V2** `_filter` coverage; **V4** runtime `SearchParameter`; **V6** HAPI `_count` cap, default `_total` mode, page-link shape; **V9** `SUBSETTED` tagging on `_summary`/`_elements` (D44).
 
 Exit test: `GET /Observation?subject.name=Simpson&_include=Observation:subject&_sort=-date&_count=10` returns a page with `next` link; blind `next`-following over 1001 Patients terminates after two pages; `_compartment` filters to one tenant only; a `_summary=true` result is tagged `SUBSETTED` and its `next` page is still summary.
 
@@ -292,7 +292,7 @@ Verify-first blocks on the implementing issues. A "no" on V1 stops the work and 
 
 | # | Question | Issue | Blocking |
 |---|---|---|---|
-| V1 | `SearchNarrowingInterceptor` fires for `_include`/`_revinclude` sub-queries; `GraphQLProvider` resolves through the DAO/interceptor chain | #7, #10 | **yes** — cross-tenant leak otherwise |
+| V1 | `SearchNarrowingInterceptor` fires for `_include`/`_revinclude` sub-queries; `GraphQLProvider` resolves through the DAO/interceptor chain | #7, #9, #10 | **yes** — cross-tenant leak otherwise |
 | V2 | `_filter` operators and dotted paths on HAPI | #9 | no |
 | V3 | GraphQL connections and mutations | #10 | no |
 | V4 | Runtime custom `SearchParameter` + `$reindex` | #9 | no |
