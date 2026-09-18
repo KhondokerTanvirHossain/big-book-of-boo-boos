@@ -2,8 +2,10 @@
 # Two checks that keep deploy/ honest (issue #2):
 #   1. every ${NAME:-default} image pin in deploy/compose/*.yml equals deploy/versions.env (BB-R-011.6)
 #   2. no secret literal in any committed config file (BB-R-011.3)
+#   3. the realm inlined in lite.yml is deploy/keycloak/bigbook-realm.json, byte for byte
 set -eu
-cd "$(dirname "$0")/../.."
+# Optional argument: the tree to check, used by check-deploy-selftest.sh. Default: this repository.
+cd "${1:-$(dirname "$0")/../..}"
 fail=0
 
 while IFS='=' read -r name value; do
@@ -16,13 +18,24 @@ while IFS='=' read -r name value; do
   done
 done < deploy/versions.env
 
-# A secret-looking key may only be empty, a ${...} reference, or a path to (or read of) a file under /run/.
+# A secret-looking key may only be empty, a ${...} reference, a $(...) command substitution, or a path under /run/.
+# Known limit, accepted in issue #3: a value that *starts with* $( is treated as a reference, so
+# password=$(cat secret.txt) passes. The scan finds literals; it does not judge where a command reads from.
+# check-deploy-selftest.sh pins both sides of that line.
 leaks=$(grep -rnEi '(password|secret|token|api_?key|private_?key)[a-z0-9_.-]*"?[[:space:]]*[:=][[:space:]]*[^[:space:]]' \
-    deploy server/src/main/resources \
-  | grep -vE '[:=][[:space:]]*"?(\$\{|\$\$\(cat /run/|/run/)' || true)
+    deploy server/src/main/resources core/src/main/resources \
+  | grep -vE '[:=][[:space:]]*"?(\$\$?\{|\$\$?\(|/run/)' || true)
 if [ -n "$leaks" ]; then
   echo "possible secret literal:"
   echo "$leaks"
+  fail=1
+fi
+
+# lite.yml must stay one self-contained file, so it carries a copy of the realm; the copy may not drift.
+inlined=$(awk '/^  realm:$/ {found=1; next} found && /^    content: \|$/ {body=1; next} body && /^      / {print substr($0, 7); next} body {exit}' \
+  deploy/compose/lite.yml | sed 's/\$\$/$/g')
+if [ "$inlined" != "$(cat deploy/keycloak/bigbook-realm.json)" ]; then
+  echo "realm drift: the realm inlined in deploy/compose/lite.yml differs from deploy/keycloak/bigbook-realm.json"
   fail=1
 fi
 

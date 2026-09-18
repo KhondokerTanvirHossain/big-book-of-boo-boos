@@ -5,40 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
-/** Boots the server against the Postgres image lite pins, laid out the way lite.yml lays it out. */
-@Testcontainers
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "bigbook.base-url=http://bigbook.test/")
-class BigBookServerApplicationTest {
-
-    @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
-                    DockerImageName.parse(System.getProperty("bigbook.test.postgres-image"))
-                            .asCompatibleSubstituteFor("postgres"))
-            .withDatabaseName("bigbook")
-            .withUsername("bigbook")
-            .withUrlParam("currentSchema", "hapi")
-            .withInitScript("create-hapi-schema.sql");
-
-    @DynamicPropertySource
-    static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-    }
+/** The HTTP surface issue #2 promised: health, metadata, and a HAPI that really stores. */
+class BigBookServerApplicationTest extends LiteStackTest {
 
     @Autowired
     TestRestTemplate http;
@@ -49,6 +24,14 @@ class BigBookServerApplicationTest {
 
         assertThat(health.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(health.getBody().path("status").asText()).isEqualTo("UP");
+    }
+
+    @Test
+    void readinessIsUpOnceBootstrapHasRun() {
+        ResponseEntity<JsonNode> readiness = http.getForEntity("/actuator/health/readiness", JsonNode.class);
+
+        assertThat(readiness.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(readiness.getBody().path("status").asText()).isEqualTo("UP");
     }
 
     @Test

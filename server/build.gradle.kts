@@ -12,10 +12,13 @@ dependencies {
     implementation(platform(SpringBootPlugin.BOM_COORDINATES))
     implementation(platform("ca.uhn.hapi.fhir:hapi-fhir-bom:${versions.getProperty("HAPI_FHIR_VERSION")}"))
 
+    implementation(project(":core"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("ca.uhn.hapi.fhir:hapi-fhir-jpaserver-base")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc")
     runtimeOnly("org.postgresql:postgresql")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
     annotationProcessor(platform(SpringBootPlugin.BOM_COORDINATES))
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
@@ -38,5 +41,6 @@ tasks.jar {
 tasks.test {
     // the integration test runs against the same Postgres the lite stack pins
     systemProperty("bigbook.test.postgres-image", "postgres:${versions.getProperty("POSTGRES_VERSION")}")
+    systemProperty("bigbook.test.keycloak-image", "quay.io/keycloak/keycloak:${versions.getProperty("KEYCLOAK_VERSION")}")
     systemProperty("bigbook.repo-root", rootDir.absolutePath)
 }

@@ -20,9 +20,10 @@ spring:
     url: jdbc:postgresql://postgres:5432/bigbook?currentSchema=hapi
     username: bigbook
     password: ${postgres-password}
-  # flyway-core arrives with HAPI's migrator; nothing of Big Book's to migrate until the bigbook schema exists
+  # Big Book's own tables, schema `bigbook`, migrations in core/. HAPI keeps schema `hapi` to itself.
   flyway:
-    enabled: false
+    default-schema: bigbook
+    schemas: bigbook
   jpa:
     open-in-view: false
     properties:
@@ -41,6 +42,10 @@ springdoc:
   swagger-ui:
     enabled: false
 
+bigbook:
+  keycloak:
+    client-secret: ${keycloak-client-secret}
+
 server:
   port: 8080
   shutdown: graceful
@@ -50,3 +55,11 @@ management:
     web:
       exposure:
         include: health
+  endpoint:
+    health:
+      # /actuator/health/readiness turns UP only once bootstrap has run; container healthchecks use it
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState, db
