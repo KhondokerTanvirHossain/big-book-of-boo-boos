@@ -93,7 +93,7 @@ sequenceDiagram
   HAPI-->>SDK: 200 Bundle searchset · application/fhir+json · ETag
 ```
 
-Writes take the same path plus a **two-phase authorisation** (ADR-001, D14): both phases run on `STORAGE_PRESTORAGE_RESOURCE_*` (ADR-001 as amended): `criteria` is evaluated against the incoming resource (phase 1), and again after `readonlyFields` restore against the resource as it will be stored (phase 2, the post-write criteria check; rollback + 403 on deny). Whether phase 2 belongs on `STORAGE_PRECOMMIT_*` instead is an ADR-001 Open item. Phase 2 is what stops a PUT from moving a resource outside its policy. A `criteria` that fails to parse at request time denies (fail closed); a `criteria` outside the evaluable subset is rejected when the `AccessPolicy` or `Subscription` is written (D15).
+Writes take the same path plus a **two-phase authorisation** (ADR-001, D14): phase 1 and the `readonlyFields` restore run at `STORAGE_PRESTORAGE_RESOURCE_*` (the existing resource must be inside `criteria`, else 403), and phase 2 runs at `STORAGE_PRECOMMIT_RESOURCE_*` (the committed state must be inside `criteria`, with a `transaction` entry's `urn:uuid` and conditional references already resolved; else 403 and rollback — the whole bundle for a `transaction`, the single entry for a `batch`). ADR-001, amended 2026-09-19. Phase 2 is what stops a PUT from moving a resource outside its policy. A `criteria` that fails to parse at request time denies (fail closed); a `criteria` outside the evaluable subset is rejected when the `AccessPolicy` or `Subscription` is written (D15).
 
 ### (b) `/auth/me`
 
@@ -285,7 +285,7 @@ Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds t
 | BB-R-003 GraphQL | — | `$graphql`, server-wide introspection toggle | PRESHOW field hiding applies unchanged; enforcing depth/cost limits (≈50) |
 | BB-R-004 Auth | login flows, OIDC grants, MFA, brokering, claims mappers, JWKS | — | `/oauth2/*` passthrough, discovery + logout reshape, `/auth/me`, JWT validation filter |
 | BB-R-005 Tenancy | organisations, users, confidential clients, required actions | partitions | Project/Membership/invite model, org↔partition map, super-admin bootstrap, `X-Project`, `provisioning` anchor rows + reconciler (ADR-007) |
-| BB-R-006 Access policies | — | AuthorizationInterceptor, PRESEARCH/PREACCESS/PRESHOW/PRESTORAGE hooks, InMemoryResourceMatcher | AccessPolicy translator, hiddenFields, readonlyFields, params, defaults, denial log, `AccessPolicy` provider |
+| BB-R-006 Access policies | — | AuthorizationInterceptor, PRESEARCH/PREACCESS/PRESHOW/PRESTORAGE/PRECOMMIT hooks, InMemoryResourceMatcher | AccessPolicy translator, hiddenFields, readonlyFields, params, defaults, denial log, `AccessPolicy` provider |
 | BB-R-007 Subscriptions | — | matching (`SubscriptionMatcherInterceptor`, registry) | delivery table + 1 s poller, retry/backoff (pinned numbers), interaction-filter extension, author-policy check (enforced), X-Signature, AuditEvent per attempt, `$resend`, outbound allow-list, write-time criteria validation |
 | BB-R-008 n8n | — | rest-hook source | recipe + example workflow (`full` only) |
 | BB-R-009 Binary | — | binary storage (`lite` DB, `full` MinIO) | — |
