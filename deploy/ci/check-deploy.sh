@@ -4,7 +4,8 @@
 #   2. no secret literal in any committed config file (BB-R-011.3)
 #   3. the realm inlined in lite.yml is deploy/keycloak/bigbook-realm.json, byte for byte
 set -eu
-cd "$(dirname "$0")/../.."
+# Optional argument: the tree to check, used by check-deploy-selftest.sh. Default: this repository.
+cd "${1:-$(dirname "$0")/../..}"
 fail=0
 
 while IFS='=' read -r name value; do
@@ -18,6 +19,9 @@ while IFS='=' read -r name value; do
 done < deploy/versions.env
 
 # A secret-looking key may only be empty, a ${...} reference, a $(...) command substitution, or a path under /run/.
+# Known limit, accepted in issue #3: a value that *starts with* $( is treated as a reference, so
+# password=$(cat secret.txt) passes. The scan finds literals; it does not judge where a command reads from.
+# check-deploy-selftest.sh pins both sides of that line.
 leaks=$(grep -rnEi '(password|secret|token|api_?key|private_?key)[a-z0-9_.-]*"?[[:space:]]*[:=][[:space:]]*[^[:space:]]' \
     deploy server/src/main/resources core/src/main/resources \
   | grep -vE '[:=][[:space:]]*"?(\$\$?\{|\$\$?\(|/run/)' || true)

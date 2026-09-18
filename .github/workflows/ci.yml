@@ -25,6 +25,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - name: Version pins in step, no secret literals
         run: deploy/ci/check-deploy.sh
+      - name: The checks themselves fail on planted defects
+        run: deploy/ci/check-deploy-selftest.sh
       - name: Build and test
         run: ./gradlew build
       - uses: actions/upload-artifact@v7
