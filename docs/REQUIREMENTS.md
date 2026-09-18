@@ -265,6 +265,28 @@ Fill: **wire OpenTelemetry** (exporters on in `full`; `lite` logs to stdout) · 
 
 Exit test: one `curl` to `/fhir/R4/Patient` produces one log line carrying project + user.
 
+## BB-R-029 Non-functional requirements (`lite`)
+Medplum ref: none (Medplum publishes no NFRs; `self-hosting/monitoring` only); `docs/HOW-IT-WORKS.md` NFR table
+Fill: **wire** (HAPI, Postgres, JVM defaults) + one k6 script and a seeded dataset (glue, test-only, uncounted) · Version: v0.1 · Status: blessed (2026-09-18)
+
+Targets are for the `lite` profile on a laptop-class host (2 vCPU, 8 GB). Measured against a seeded dataset of 100k `Patient` and 1M `Observation` in one project.
+
+1. Install: ≤ 10 min cold-cache, three containers (restates BB-R-011.1).
+2. Footprint: `lite` idles under 3 GB RAM total across the three containers after 5 min idle.
+3. Read latency: `GET /fhir/R4/Patient/{id}` p95 < 100 ms.
+4. Search latency: single-parameter search (`Patient?name=`, `Observation?subject=`) p95 < 300 ms; `_count` ≤ 20.
+5. Write latency: single `POST /fhir/R4/Observation` p95 < 200 ms with referential integrity on.
+6. Concurrency: 50 concurrent SDK clients running the read/search/write mix for 5 min with zero 5xx.
+7. Subscription delivery: matched → rest-hook POST sent, p95 < 5 s (restates BB-R-007 exit test).
+8. Restart safety: `docker compose restart` mid-load loses no committed write and no pending delivery (restates BB-R-007.3).
+9. Data safety: Postgres is the only state; `pg_dump` + `pg_restore` produces an identical `_history` for every resource.
+10. Auth: an invalid or expired bearer is rejected with 401 without a database hit; a valid bearer costs at most one membership lookup per request (cached per BB-R-006 rule cache).
+11. Logs: every request emits one JSON line with request id, project id, user id (restates BB-R-015).
+
+Not v0.1: horizontal scaling, HA Postgres, multi-node subscriptions (ADR-002/006), rate limits (BB-R-023), BALP audit (BB-R-018), backup/DR guides (v0.3).
+
+Exit test: `perf/k6/lite.js` against the seeded stack in CI reports p95 for (3)–(5) under target and zero 5xx for (6); a restart step in the same job proves (8); `docker stats` sample proves (2).
+
 ---
 
 # Deliberate divergences from Medplum (contract, not defects)

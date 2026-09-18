@@ -92,7 +92,7 @@ examples/
 
 | Version | Scope | Exit criterion |
 |---|---|---|
-| v0.1 | `lite` profile: store, Keycloak auth, tenancy, access policies, subscriptions, Java SDK, low-code admin | Baymax reads/writes patient records through it |
+| v0.1 | `lite` profile: store, Keycloak auth, tenancy, access policies, subscriptions, Java SDK, low-code admin, NFR floor (BB-R-029) | Baymax reads/writes patient records through it |
 | v0.2 | Bot SDK, CLI, audit events, bulk export, `full` profile | Niramoy prescription module writes `MedicationRequest` via Big Book |
 | v0.3 | HL7v2 agent, terminology (Snowstorm), BD IG v1, proper admin UI | External pilot user outside Niramoy |
 | v1.0 | Medplum wire-compat verified; docs site; 3+ external deployments | — |

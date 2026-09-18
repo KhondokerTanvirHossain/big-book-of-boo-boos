@@ -209,9 +209,9 @@ In v0.1 the console signs in with Appsmith accounts and talks to Big Book as one
 
 ---
 
-## Non-functional requirements (v0.1 — proposed, to be blessed)
+## Non-functional requirements (v0.1 — BB-R-029)
 
-Nothing below is in REQUIREMENTS.md yet. Numbers are proposals for a laptop `lite` install and become BB-R-029 once blessed (BB-R-028 is the HL7v2 agent).
+Targets for a laptop-class `lite` install (2 vCPU, 8 GB), measured against 100k `Patient` + 1M `Observation` in one project; the k6 job that proves them is issue #22.
 
 | Concern | v0.1 target | Measured how |
 |---|---|---|
@@ -224,7 +224,7 @@ Nothing below is in REQUIREMENTS.md yet. Numbers are proposals for a laptop `lit
 | Subscription delivery | matched → POST sent, p95 < 5 s | exit test BB-R-007 |
 | Restart safety | no lost writes, no lost pending deliveries across `docker compose restart` | exit test BB-R-007.3 |
 | Data safety | Postgres is the only state; `pg_dump` is a full backup | documented, BB-R-011 |
-| Auth | invalid or expired token rejected with 401 in < 10 ms, no DB hit (a valid token still costs one membership lookup) | unit test |
+| Auth | invalid or expired bearer rejected with 401 without a database hit; a valid bearer costs at most one membership lookup per request (cached) | JUnit: no JDBC call on an invalid-token request (BB-R-029.10) |
 | Logs | every request logs request id, project id, user id (JSON) | exit test BB-R-015 |
 
 Not v0.1: horizontal scaling, HA Postgres, multi-node subscriptions (single JVM by ADR-002/006), audit compliance profiles (BALP, v0.2), rate limits (v0.2), backup/DR guides (v0.3).
