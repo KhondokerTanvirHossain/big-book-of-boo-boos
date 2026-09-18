@@ -2,7 +2,7 @@
 
 **A Medplum-shaped healthcare backend for the JVM.** FHIR store, login, multi-tenancy, access policies, subscriptions and a Java SDK — installed with one command, built from HAPI FHIR and Keycloak, held together by a few thousand lines of Spring.
 
-> Status: `lite` boots from source (PR #23); the published image and the two-command install land with the v0.1.0 tag. If you're here to help, see [Contributing](#contributing).
+> Status: `lite` boots from source (PR #23); the published image and the two-command install land with the v0.1.0 tag. v0.1 target: March 2027. If you're here to help, see [Contributing](#contributing).
 
 ## What it is
 
