@@ -284,8 +284,8 @@ What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its s
 |---|---|---|---|---|---|---|
 | #2 `lite` skeleton | — | — | **237 actual** | — | **237 actual** | PR #23 |
 | #3 bootstrap | **182 actual** | — | **152 actual** | — | **334 actual** | PR #25 |
-| #4 tenant model | ≈750 (g) | — | ≈200: `X-Project` ≈30 (BB-R-005.11) + partition identity and project routes ≈170 (g) | — | ≈950 | ADR-007: reconciler ≈60, inside the 750. ADR-001 charges defaults/promote-demote ≈150 to BB-R-005; placed here (g). Tenant split #4 : #6 = 2 : 1 of what #3 left (g) |
-| #5 auth surface | — | — | ≈450 (g) | — | ≈450 | remainder of `server/` |
+| #4 tenant model | **205 actual** | — | **501 actual**: token validation and project resolution 172 (moved here from #5, 2026-09-19), partition identity and `_project`/`_compartment` 80, project routes 187, `OperationOutcome` writer 37, wiring 25 | — | **706 actual** | PR for #4. Estimate was ≈950 + the lines moved from #5, so the issue is inside its share; but the (g) split was wrong about *where*: ≈750 was guessed for `core/` and ≈200 for `server/`. Reconciler is 25 lines, not ≈60. Not built here, so not yet counted: `Project.owner` and user-scope rules (arrive with #6's member routes) |
+| #5 auth surface | — | — | ≈280 (g) | — | ≈280 | remainder of `server/`, less the 172 lines of token validation and project resolution that #4 took (decided 2026-09-19). Keeps `/oauth2/*` passthrough, reshaped endpoints, `/auth/me`, remaining claim mappers |
 | #6 invite, client routes | ≈370 (g) | — | ≈200 (g) | — | ≈570 | ADR-007 same pattern as #4; split (g) |
 | #7 access policy | — | 1.4–1.6k | ≈150 `AccessPolicy` provider and wiring (g) | — | ≈1.55–1.75k | ADR-001 line items: translator 400, `PRESEARCH` 120, `PREACCESS` 150, `hiddenFields` 150, `readonlyFields` 100, post-write 50, write-time validation 60, params 100, interaction split 60, subscriptions 100, denial log 50, backstop 20 = 1,360, + extras ≤200. **Ceiling 1.6k on `core/policy`** (issue #7). The provider is listed under `server/` in §3 and is not in ADR-001's items |
 | #9 search | — | — | ≈50 `_project` / `_compartment` → partition (g) | — | ≈50 | "glue, small" (issue #9, T26) |
@@ -294,6 +294,8 @@ What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its s
 | #15 Java SDK | — | — | — | ≈800 | ≈800 | §3 |
 | #17 observability | — | — | ≈100 MDC, JSON log fields (g) | — | ≈100 | remainder of `server/` |
 | **Module total** | **≈1.3k** | **1.4–1.6k** | **≈1.8k** | **≈0.8k** | **≈5.3–5.5k** | §3 |
+
+**Module drift after #4 (2026-09-19), for a decision, not yet applied to §3:** with #2–#4 as actuals and the rest as estimated, `server/` adds up to ≈1.93k against its 1.8k share, and `core/` tenant to ≈0.76k against 1.3k. The total is unchanged; the tenant model turned out to be mostly request handling (`server/`) and little domain code (`core/`). Either rebalance the two module shares by ≈0.15–0.5k or treat `server/` 1.8k as the tripwire it now is.
 
 Wire-only issues (#8, #11, #13, #14, #16, #18, #22) carry no glue share; glue appearing in one of them is new scope (`docs/BIGBOOK.md`: it needs a matching removal).
 
