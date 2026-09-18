@@ -26,6 +26,7 @@ import ca.uhn.fhir.rest.server.HardcodedServerAddressStrategy;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.provider.ResourceProviderFactory;
 import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
+import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
 import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import org.hl7.fhir.r4.model.Bundle;
@@ -65,9 +66,12 @@ public class FhirServerConfig {
         return new JpaStorageSettings();
     }
 
+    /** One project is one partition (issue #4). References across partitions stay HAPI's default: not allowed. */
     @Bean
     public PartitionSettings partitionSettings() {
-        return new PartitionSettings();
+        PartitionSettings settings = new PartitionSettings();
+        settings.setPartitioningEnabled(true);
+        return settings;
     }
 
     @Bean
@@ -128,7 +132,9 @@ public class FhirServerConfig {
             JpaStorageSettings storageSettings,
             ISearchParamRegistry searchParamRegistry,
             IValidationSupport validationSupport,
-            DatabaseBackedPagingProvider pagingProvider) {
+            DatabaseBackedPagingProvider pagingProvider,
+            TenantStore tenantStore,
+            PartitionSettings partitionSettings) {
         RestfulServer server = new RestfulServer(systemDao.getContext());
         daoRegistry.setSupportedResourceTypes(systemDao.getContext().getResourceTypes());
         server.registerProviders(resourceProviders.createProviders());
@@ -136,6 +142,7 @@ public class FhirServerConfig {
         server.setServerConformanceProvider(new JpaCapabilityStatementProvider(
                 server, systemDao, storageSettings, searchParamRegistry, validationSupport));
         server.setPagingProvider(pagingProvider);
+        server.registerInterceptor(new PartitionInterceptor(tenantStore, partitionSettings));
         server.setServerAddressStrategy(new HardcodedServerAddressStrategy(properties.fhirBaseUrl()));
         return server;
     }

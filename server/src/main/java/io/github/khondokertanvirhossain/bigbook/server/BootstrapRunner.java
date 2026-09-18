@@ -1,5 +1,6 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
+import io.github.khondokertanvirhossain.bigbook.core.Project;
 import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -21,6 +22,8 @@ public class BootstrapRunner implements ApplicationRunner {
     static final String REFUSED_PASSWORD = "medplum_admin";
 
     static final String SUPER_ADMIN_PROJECT_NAME = "Super Admin";
+
+    static final int RECONCILE_OLDER_THAN_MINUTES = 5;
 
     private static final Logger log = LoggerFactory.getLogger(BootstrapRunner.class);
 
@@ -62,7 +65,7 @@ public class BootstrapRunner implements ApplicationRunner {
         Duration pause = Duration.ofSeconds(2);
         while (true) {
             try {
-                TenantProvisioner.Project project = provisioner.ensureSuperAdminProject(SUPER_ADMIN_PROJECT_NAME);
+                Project project = provisioner.ensureSuperAdminProject(SUPER_ADMIN_PROJECT_NAME);
                 provisioner.ensureAdminMembership(project, admin.email(), password, true, () -> {
                     if (generated) {
                         // the one time this is ever shown (BB-R-005.7); not stored anywhere by Big Book
@@ -70,6 +73,8 @@ public class BootstrapRunner implements ApplicationRunner {
                     }
                 });
                 log.info("Bootstrap complete: super-admin project {} ({})", project.id(), admin.email());
+                // ADR-007: finish creates an earlier run left half done; anything younger may still be in flight elsewhere
+                provisioner.reconcile(RECONCILE_OLDER_THAN_MINUTES);
                 return;
             } catch (RuntimeException failure) {
                 if (waited.compareTo(giveUpAfter) >= 0) {

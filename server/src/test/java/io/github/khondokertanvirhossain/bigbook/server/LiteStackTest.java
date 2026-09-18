@@ -1,9 +1,25 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory;
+import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
+import org.keycloak.admin.client.Keycloak;
+import org.keycloak.representations.idm.ClientRepresentation;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClient;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -60,5 +76,81 @@ abstract class LiteStackTest {
         registry.add("bigbook.admin.password", () -> ADMIN_PASSWORD);
         registry.add("bigbook.keycloak.url", LiteStackTest::keycloakUrl);
         registry.add("bigbook.keycloak.client-secret", () -> CLIENT_SECRET);
+    }
+
+    static final String TEST_CLIENT = "bigbook-tests";
+    static final String USER_PASSWORD = UUID.randomUUID().toString();
+
+    @Autowired
+    protected TestRestTemplate http;
+
+    @Autowired
+    protected Keycloak keycloak;
+
+    @Autowired
+    protected TenantStore store;
+
+    @Autowired
+    protected JdbcClient jdbc;
+
+    /**
+     * A token straight from Keycloak, as issue #4's criteria say: password grant on a throwaway public
+     * client (which clients the realm ships is issue #5's), bound to a project by {@code organization:<alias>}.
+     */
+    protected String token(String email, String password, String scope) {
+        ClientRepresentation client = new ClientRepresentation();
+        client.setClientId(TEST_CLIENT);
+        client.setPublicClient(true);
+        client.setDirectAccessGrantsEnabled(true);
+        keycloak.realm(TenantConfig.REALM).clients().create(client).close(); // 409 after the first time
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "password");
+        form.add("client_id", TEST_CLIENT);
+        form.add("username", email);
+        form.add("password", password);
+        form.add("scope", scope);
+        return RestClient.create().post()
+                .uri(keycloakUrl() + "/realms/bigbook/protocol/openid-connect/token")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(form)
+                .retrieve()
+                .body(JsonNode.class)
+                .path("access_token").asText();
+    }
+
+    protected String tokenFor(String email, UUID projectId) {
+        return token(email, USER_PASSWORD, "openid organization:" + projectId);
+    }
+
+    protected String superAdminToken() {
+        return token(ADMIN_EMAIL, ADMIN_PASSWORD, "openid organization:" + store.superAdminProject().orElseThrow().id());
+    }
+
+    /** A Keycloak user with {@link #USER_PASSWORD}; returns its id, the token {@code sub}. */
+    protected String seedUser(String email) {
+        return new KeycloakDirectory(keycloak.realm(TenantConfig.REALM)).ensureUser(email, "Test", "User", USER_PASSWORD, () -> {});
+    }
+
+    /** Issue #4: memberships seeded directly. The invite route that will do this is issue #6. */
+    protected void seedSeat(UUID projectId, String email, String userId, boolean admin) {
+        KeycloakDirectory directory = new KeycloakDirectory(keycloak.realm(TenantConfig.REALM));
+        directory.ensureOrganizationMember(directory.organizationId(projectId.toString()), userId);
+        store.insertProvisioningMembership(projectId, email, admin);
+        store.markMembershipActive(projectId, email, userId);
+    }
+
+    protected <T> ResponseEntity<T> call(HttpMethod method, String url, String bearer, Object body, Class<T> type, String... headers) {
+        HttpHeaders httpHeaders = new HttpHeaders();
+        if (bearer != null) {
+            httpHeaders.setBearerAuth(bearer);
+        }
+        if (body != null) {
+            // FHIR resources are sent as strings; a map is a plain JSON payload (admin routes, $graphql)
+            httpHeaders.setContentType(body instanceof String ? MediaType.valueOf("application/fhir+json") : MediaType.APPLICATION_JSON);
+        }
+        for (int i = 0; i + 1 < headers.length; i += 2) {
+            httpHeaders.set(headers[i], headers[i + 1]);
+        }
+        return http.exchange(url, method, new HttpEntity<>(body, httpHeaders), type);
     }
 }
