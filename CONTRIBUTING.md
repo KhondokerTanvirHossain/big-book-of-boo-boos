@@ -26,7 +26,7 @@ Comment "I'll take this" on the issue. A maintainer assigns it. If nothing happe
 
 ## 3. Set up
 
-You need **JDK 21** and Docker with Compose v2.23.1+. The build tool is **Gradle** (Kotlin DSL), through the wrapper; don't install Gradle yourself.
+Prerequisites: **Docker Compose ≥ 2.23.1** and **JDK 21**. The build tool is **Gradle** (Kotlin DSL), through the wrapper; don't install Gradle yourself.
 
 ```
 git clone https://github.com/KhondokerTanvirHossain/big-book-of-boo-boos

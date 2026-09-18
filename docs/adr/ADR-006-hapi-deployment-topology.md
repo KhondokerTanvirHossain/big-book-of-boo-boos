@@ -13,6 +13,8 @@ Context: raised by the Architect while drafting `docs/ARCHITECTURE.md`. BIGBOOK.
 ## Consequences
 - "four containers" → "three" in BIGBOOK.md (`lite` principle, stack table), BB-R-011.1, ADR-001, ADR-004.
 - HAPI upgrades are a Big Book build and release, not a `docker pull`. HAPI version pinned in the single versions file; upgrade cadence is the Big Book release cadence (BIGBOOK.md "Pin everything").
+- First instance of that cost (issue #2, HAPI 8.12.1): HAPI's BOM pins Testcontainers 2.x while Spring Boot's pins the 1.x modules; Gradle resolved the higher core against the lower modules and the tests failed to link until the 2.x module names were used. Expect the same class of BOM disagreement on every HAPI upgrade.
+- HAPI and Big Book tables share one database (`bigbook`, schemas `hapi` and `bigbook`; Keycloak has its own) so the subscription delivery table (ARCHITECTURE.md §2(c)) and HAPI writes can share a transaction.
 - `full` profile unchanged; `admin` overlay unchanged.
 - Reuse-first is not weakened: HAPI is still the FHIR server, consumed as a library rather than an image.
 

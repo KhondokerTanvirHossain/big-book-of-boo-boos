@@ -4,7 +4,8 @@
 
 ## You need
 
-- Docker with Compose **v2.23.1 or newer** (`docker compose version`). `lite.yml` carries its init scripts inline, which older Compose cannot read.
+- **Docker Compose ≥ 2.23.1** (`docker compose version`). `lite.yml` carries its init scripts inline, which older Compose cannot read.
+- **JDK 21**, only while you build the server image from source, which is the case until the v0.1.0 tag publishes it (see the note under Install).
 - About 3 GB of free memory, and ports **8080** and **8081** free.
 
 ## Install

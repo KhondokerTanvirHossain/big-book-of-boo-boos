@@ -15,7 +15,7 @@ flowchart LR
     direction TB
     BB["Big Book server (Spring Boot)<br/>HAPI FHIR JPA embedded<br/>/fhir/R4 · /oauth2/* · /auth/me · /admin/*"]
     KC["Keycloak"]
-    PG["Postgres<br/>(hapi · bigbook · keycloak DBs)"]
+    PG["Postgres<br/>bigbook DB (hapi + bigbook schemas) · keycloak DB"]
   end
 
   subgraph ADMIN["admin overlay"]
