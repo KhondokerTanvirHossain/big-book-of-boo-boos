@@ -5,7 +5,7 @@ Decision: **Embed.** HAPI FHIR JPA runs inside the Big Book Spring Boot JVM. `li
 Context: raised by the Architect while drafting `docs/ARCHITECTURE.md`. BIGBOOK.md's repo layout said "Spring Boot app embedding HAPI JPA" while BIGBOOK.md `lite`, BB-R-011.1, ADR-001 and ADR-004 said "four containers" including a HAPI container. Incompatible.
 
 ## Rationale
-- ADR-001's enforcement path (AuthorizationInterceptor, SearchNarrowingInterceptor, STORAGE_PRESHOW_RESOURCES, STORAGE_PRESTORAGE_RESOURCE_UPDATED, subscription hooks) requires Big Book code in HAPI's JVM. A separate HAPI container would mean shipping a custom HAPI image carrying Big Book's interceptors — the same coupling with worse packaging.
+- ADR-001's enforcement path (AuthorizationInterceptor, STORAGE_PRESEARCH_REGISTERED, STORAGE_PREACCESS_RESOURCES, STORAGE_PRESHOW_RESOURCES, STORAGE_PRESTORAGE_RESOURCE_*, subscription hooks — as amended 2026-09-18; originally it named SearchNarrowingInterceptor) requires Big Book code in HAPI's JVM. A separate HAPI container would mean shipping a custom HAPI image carrying Big Book's interceptors — the same coupling with worse packaging.
 - ADR-004's v0.3 Vaadin option assumes the same JVM.
 - It is what the repo layout already stated.
 - One fewer image on the 10-minute timer.

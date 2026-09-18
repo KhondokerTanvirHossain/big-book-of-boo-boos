@@ -93,7 +93,7 @@ sequenceDiagram
   HAPI-->>SDK: 200 Bundle searchset · application/fhir+json · ETag
 ```
 
-Writes take the same path plus a **two-phase authorisation** (ADR-001, D14): `STORAGE_PRESTORAGE_*` evaluates the policy `criteria` against the incoming resource (phase 1), and `STORAGE_PRECOMMIT_*` re-evaluates it against the stored result inside the transaction (phase 2, rollback + 403 on deny). Phase 2 is what stops a PUT from moving a resource outside its policy. A `criteria` that fails to parse at request time denies (fail closed); a `criteria` outside the evaluable subset is rejected when the `AccessPolicy` or `Subscription` is written (D15).
+Writes take the same path plus a **two-phase authorisation** (ADR-001, D14): both phases run on `STORAGE_PRESTORAGE_RESOURCE_*` (ADR-001 as amended): `criteria` is evaluated against the incoming resource (phase 1), and again after `readonlyFields` restore against the resource as it will be stored (phase 2, the post-write criteria check; rollback + 403 on deny). Whether phase 2 belongs on `STORAGE_PRECOMMIT_*` instead is an ADR-001 Open item. Phase 2 is what stops a PUT from moving a resource outside its policy. A `criteria` that fails to parse at request time denies (fail closed); a `criteria` outside the evaluable subset is rejected when the `AccessPolicy` or `Subscription` is written (D15).
 
 ### (b) `/auth/me`
 

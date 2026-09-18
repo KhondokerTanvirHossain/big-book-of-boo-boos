@@ -29,6 +29,7 @@ Low. The `AccessPolicy` JSON contract and the compile step are the seam: retarge
 ## Open — Claude Code tasks
 - (V1 follow-up) Confirm `STORAGE_PRESEARCH_REGISTERED` fires for GraphQL nested searches on 8.12.1 and honours `SearchParameterMap` mutation.
 - (V1 follow-up) Confirm a `PREACCESS` drop on a single `read` yields 404; reconcile with `medplum-parity.md`.
+- (Raised 2026-09-19, for the Architect) **Phase 2 of the write check: `PRESTORAGE_*` or `PRECOMMIT_*`?** This ADR puts the post-write criteria check on `STORAGE_PRESTORAGE_RESOURCE_*`; the pre-amendment text and issue #7 had it on `STORAGE_PRECOMMIT_RESOURCE_*`. Issue #7 now follows this ADR. Reason to reconsider, from the 8.12.1 source, not yet run: inside a `transaction` bundle HAPI defers the `PRECOMMIT_*` broadcasts (`BaseTransactionProcessor`, `beginAcceptingDeferredInterceptorBroadcasts`) until after `resolveReferencesThenSaveAndIndexResources`, while `PRESTORAGE_*` fires during each entry. A criterion over a reference, e.g. `subject=%patient`, would therefore see a `urn:uuid:` placeholder at `PRESTORAGE_*` and the resolved `Patient/123` at `PRECOMMIT_*`. Confirm by test before deciding; if confirmed, either phase 2 moves or transaction entries need their own rule.
 - Confirm `InMemoryResourceMatcher` handles `:not` on 8.12.1 (sets the write-time validation subset).
 - Confirm whether HAPI JPA accepts a custom `@ResourceDef` type cleanly; if yes, drop the AccessPolicy provider and use JPA.
 
