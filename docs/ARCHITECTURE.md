@@ -1,6 +1,6 @@
 # Big Book — Architecture
 
-> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed, reconciled 2026-09-17) or ADR-001/002/003/004/006/007 (HAPI JPA embedded in the Big Book server; `lite` = three containers; no event bus; reconcile-never-compensate provisioning). Status: **current** (2026-09-18: §2(e)–(g) create-project, invite, browser login per ADR-007; §3 glue tally 5.2k). If code and this file disagree, code wins — then fix this file.
+> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed, reconciled 2026-09-17) or ADR-001/002/003/004/006/007 (HAPI JPA embedded in the Big Book server; `lite` = three containers; no event bus; reconcile-never-compensate provisioning). Status: **current** (2026-09-18: §2(e)–(g) create-project, invite, browser login per ADR-007; §3 glue tally 5.5k). If code and this file disagree, code wins — then fix this file.
 
 ## 1. Components — `lite`, with `full` and `admin` overlays dashed
 
@@ -84,11 +84,12 @@ sequenceDiagram
   SDK->>BB: GET /fhir/R4/Patient?name=x  Bearer
   BB->>BB: validate JWT (JWKS cached) · MDC: request-id, project, user
   BB->>HAPI: STORAGE_PARTITION_IDENTIFY_READ → partition = project claim
-  BB->>HAPI: AuthorizationInterceptor rule list ← AccessPolicy translator (cached per membership) — ADR-001
-  BB->>HAPI: SearchNarrowingInterceptor → + partition + criteria (pre-query)
-  HAPI->>PG: SQL search
+  BB->>HAPI: STORAGE_PRESEARCH_REGISTERED → SearchParameterMap += compiled criteria (pre-query, every search incl. GraphQL nested)
+  BB->>HAPI: AuthorizationInterceptor rule list ← translator (type × interaction, cached per membership) — ADR-001
+  HAPI->>PG: SQL search (+ _include / _revinclude joins, unfiltered)
   PG-->>HAPI: rows
-  BB->>HAPI: STORAGE_PRESHOW_RESOURCES → FhirQueryRuleTester backstop · hiddenFields removed
+  BB->>HAPI: STORAGE_PREACCESS_RESOURCES → drop entries failing criteria (includes, GraphQL refs; primary entries = WARN backstop)
+  BB->>HAPI: STORAGE_PRESHOW_RESOURCES → hiddenFields removed
   HAPI-->>SDK: 200 Bundle searchset · application/fhir+json · ETag
 ```
 
@@ -266,9 +267,9 @@ Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds t
 
 ## 3. Module map
 
-| Module | Owns | Depends on | Glue share (v0.1 ≈ 5.2k of 5–10k, 2026-09-18) |
+| Module | Owns | Depends on | Glue share (v0.1 ≈ 5.5k estimated of 5–10k, 2026-09-18; ADR-001 1.4–1.6k) |
 |---|---|---|---|
-| `core/` | Tenant model (Project, ProjectMembership, invite, Keycloak org ↔ HAPI partition, `provisioning` status + startup reconciler ≈60 — ADR-007), AccessPolicy translator + parameter substitution + two-phase write check + criteria validator, shared types | HAPI structures, Keycloak admin client | ≈2.6k (tenant 1.3k · policy 1.3k) |
+| `core/` | Tenant model (Project, ProjectMembership, invite, Keycloak org ↔ HAPI partition, `provisioning` status + startup reconciler ≈60 — ADR-007), AccessPolicy translator + parameter substitution + two-phase write check + criteria validator, shared types | HAPI structures, Keycloak admin client | ≈2.9k (tenant 1.3k · policy 1.4–1.6k, ADR-001 amended) |
 | `server/` | Spring Boot app: embedded HAPI JPA, interceptor registration, `/oauth2/*` passthrough + reshaped discovery/logout, `/auth/me`, `/admin/*`, `AccessPolicy` provider, subscription delivery table + poller + signature + AuditEvent (≈150), outbound allow-list (≈40), GraphQL depth/cost limits (≈50), `X-Project`, bootstrap | `core/`, HAPI JPA, Spring Security | ≈1.8k |
 | `client/` | `BigBookClient`, auth flows, typed CRUD/search/batch/binary, Spring Boot starter | HAPI generic client | ≈0.8k |
 | `bots/` | v0.2 — Camel bot runtime + starter | `core/` | 0 in v0.1 |
@@ -284,7 +285,7 @@ Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds t
 | BB-R-003 GraphQL | — | `$graphql`, server-wide introspection toggle | PRESHOW field hiding applies unchanged; enforcing depth/cost limits (≈50) |
 | BB-R-004 Auth | login flows, OIDC grants, MFA, brokering, claims mappers, JWKS | — | `/oauth2/*` passthrough, discovery + logout reshape, `/auth/me`, JWT validation filter |
 | BB-R-005 Tenancy | organisations, users, confidential clients, required actions | partitions | Project/Membership/invite model, org↔partition map, super-admin bootstrap, `X-Project`, `provisioning` anchor rows + reconciler (ADR-007) |
-| BB-R-006 Access policies | — | AuthorizationInterceptor, SearchNarrowingInterceptor, FhirQueryRuleTester, hooks | AccessPolicy translator, hiddenFields, readonlyFields, params, defaults, denial log, `AccessPolicy` provider |
+| BB-R-006 Access policies | — | AuthorizationInterceptor, PRESEARCH/PREACCESS/PRESHOW/PRESTORAGE hooks, InMemoryResourceMatcher | AccessPolicy translator, hiddenFields, readonlyFields, params, defaults, denial log, `AccessPolicy` provider |
 | BB-R-007 Subscriptions | — | matching (`SubscriptionMatcherInterceptor`, registry) | delivery table + 1 s poller, retry/backoff (pinned numbers), interaction-filter extension, author-policy check (enforced), X-Signature, AuditEvent per attempt, `$resend`, outbound allow-list, write-time criteria validation |
 | BB-R-008 n8n | — | rest-hook source | recipe + example workflow (`full` only) |
 | BB-R-009 Binary | — | binary storage (`lite` DB, `full` MinIO) | — |
