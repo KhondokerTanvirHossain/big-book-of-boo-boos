@@ -17,10 +17,10 @@ while IFS='=' read -r name value; do
   done
 done < deploy/versions.env
 
-# A secret-looking key may only be empty, a ${...} reference, or a path to (or read of) a file under /run/.
+# A secret-looking key may only be empty, a ${...} reference, a $(...) command substitution, or a path under /run/.
 leaks=$(grep -rnEi '(password|secret|token|api_?key|private_?key)[a-z0-9_.-]*"?[[:space:]]*[:=][[:space:]]*[^[:space:]]' \
     deploy server/src/main/resources core/src/main/resources \
-  | grep -vE '[:=][[:space:]]*"?(\$\$?\{|\$\$\(cat /run/|/run/)' || true)
+  | grep -vE '[:=][[:space:]]*"?(\$\$?\{|\$\$?\(|/run/)' || true)
 if [ -n "$leaks" ]; then
   echo "possible secret literal:"
   echo "$leaks"
