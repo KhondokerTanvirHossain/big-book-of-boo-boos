@@ -1,6 +1,6 @@
 # Big Book — Architecture
 
-> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed, reconciled 2026-09-17) or ADR-001/002/003/004/006 (HAPI JPA embedded in the Big Book server; `lite` = three containers; no event bus). Status: **current** (inventory reconcile 2026-09-17: §2(a) post-write check, §2(c) delivery table, §3 glue tally). If code and this file disagree, code wins — then fix this file.
+> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed, reconciled 2026-09-17) or ADR-001/002/003/004/006/007 (HAPI JPA embedded in the Big Book server; `lite` = three containers; no event bus; reconcile-never-compensate provisioning). Status: **current** (2026-09-18: §2(e)–(g) create-project, invite, browser login per ADR-007; §3 glue tally 5.2k). If code and this file disagree, code wins — then fix this file.
 
 ## 1. Components — `lite`, with `full` and `admin` overlays dashed
 
@@ -177,11 +177,98 @@ sequenceDiagram
 
 Human attribution is absent in v0.1 (audited to the ClientApplication); v0.2 adds `X-Medplum-On-Behalf-Of` (BB-R-024).
 
+### (e) Create project — super-admin (`createProject`, HTTP spelling per issue #4)
+
+Narrative: `docs/HOW-IT-WORKS.md` §2–§4. Write order is fixed; failure handling per **ADR-007**.
+
+```mermaid
+sequenceDiagram
+  participant A as Super-admin (SDK / Appsmith)
+  box Big Book container
+    participant BB as Big Book (Spring)
+    participant HAPI as HAPI JPA
+  end
+  participant PG as Postgres (bigbook)
+  participant KC as Keycloak
+
+  A->>BB: POST /admin/projects {name, settings}  Bearer (super-admin)
+  BB->>PG: INSERT project {id=uuid, status=provisioning, settings}  (tx 1)
+  BB->>KC: Admin REST: create organisation {alias=id, name}  — idempotent by alias
+  KC-->>BB: 201 | 409 (already exists → continue)
+  BB->>HAPI: partition create {name=id}  — idempotent by name
+  HAPI->>PG: INSERT partition (hapi schema)
+  BB->>PG: UPDATE project status=active  (tx 2)
+  BB-->>A: 201 Project
+  Note over BB,PG: failure at any step → OperationOutcome; row stays `provisioning`; retry of the same POST resumes at the failed step; startup reconciler sweeps stragglers — ADR-007
+```
+
+Partial failure, worked: Keycloak org created, partition create fails → row `provisioning`, org exists with alias = id. Retry: INSERT is skipped (row present), org create returns 409 and continues, partition create runs, status → `active`. Nothing is deleted. A project in `provisioning` is invisible to non-super-admins (BB-R-005.13).
+
+### (f) Invite user — `POST /admin/projects/:id/invite`
+
+Narrative: `docs/HOW-IT-WORKS.md` §2–§4. Same pattern as (e); membership row is the anchor.
+
+```mermaid
+sequenceDiagram
+  participant A as Project admin
+  box Big Book container
+    participant BB as Big Book (Spring)
+    participant HAPI as HAPI JPA
+  end
+  participant PG as Postgres (bigbook)
+  participant KC as Keycloak
+  participant M as SMTP
+
+  A->>BB: POST /admin/projects/:id/invite {resourceType, email, scope, membership{admin, access[]}, mfaRequired}
+  BB->>BB: policy: caller is admin of :id or super-admin
+  BB->>PG: INSERT project_membership {id, project, status=provisioning, admin, access[]}  (tx 1)
+  BB->>KC: Admin REST: find user by email; create if absent (scope=server: realm user; scope=project: org-bound) — idempotent
+  BB->>KC: add user to organisation :id; set required action MFA if mfaRequired
+  BB->>HAPI: conditional create Practitioner|Patient|RelatedPerson ?identifier=email (partition :id)
+  HAPI->>PG: INSERT resource (hapi schema, partition :id)
+  BB->>PG: UPDATE membership {profile=Type/id, user=kc-sub, status=active}  (tx 2)
+  BB->>KC: Admin REST: execute-actions-email (set password / verify)
+  KC->>M: invite email
+  BB-->>A: 200 ProjectMembership
+  Note over BB,KC: email failure after tx 2 → 200 with warning OperationOutcome (Medplum behaviour, inventory T5); everything before tx 2 → ADR-007
+```
+
+`ClientApplication` (`…/client`) follows the same order with a Keycloak confidential client instead of a user and no email; the secret is readable on the resource (ADR-004, inventory D5).
+
+### (g) Browser authorization-code login — predecessor to (b)
+
+Narrative: `docs/HOW-IT-WORKS.md` §2. No Big Book UI is involved; Keycloak renders every page.
+
+```mermaid
+sequenceDiagram
+  participant U as Browser
+  participant APP as App (any OIDC client / SDK signInWithRedirect)
+  participant BB as Big Book (Spring)
+  participant KC as Keycloak
+
+  U->>APP: open app
+  APP->>BB: GET /oauth2/authorize?response_type=code&client_id&redirect_uri&scope=openid profile organization:<project>&code_challenge (S256)
+  BB-->>U: 302 → /realms/bigbook/protocol/openid-connect/auth?… (path rewrite, params passthrough)
+  U->>KC: login page: password | brokered IdP | MFA required action
+  Note over KC: multi-organisation user without organization:<alias> → Keycloak organisation selection (wire Keycloak; verify-first on issue #5)
+  KC-->>U: 302 → redirect_uri?code&state
+  U->>APP: code
+  APP->>BB: POST /oauth2/token grant_type=authorization_code&code&code_verifier&client_id (public client)
+  BB->>KC: passthrough
+  KC-->>BB: access_token {sub, profile, organization=project, login_id←sid (v0.2), client_id←azp (v0.2)} + refresh_token
+  BB-->>APP: tokens — v0.1 as-is; v0.2 body enriched with project + profile (ADR-003, inventory D3)
+  APP->>BB: GET /auth/me  Bearer  → §2(b)
+```
+
+Issuer = Big Book public URL because Keycloak `hostname` is set to it (ADR-003). Logout: `POST /oauth2/logout` Bearer → Big Book → Keycloak Admin REST session delete (re-shaped, ADR-003).
+
+Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds the token to one organisation; (2) bare `organization` scope triggers the built-in organisation selector for multi-org users. If (2) is absent, project selection at login becomes a Big Book step — raised as a proposed ADR-008, not worked around.
+
 ## 3. Module map
 
-| Module | Owns | Depends on | Glue share (v0.1 ≈ 5.1k of 5–10k, reconciled 2026-09-17) |
+| Module | Owns | Depends on | Glue share (v0.1 ≈ 5.2k of 5–10k, 2026-09-18) |
 |---|---|---|---|
-| `core/` | Tenant model (Project, ProjectMembership, invite, Keycloak org ↔ HAPI partition), AccessPolicy translator + parameter substitution + two-phase write check + criteria validator, shared types | HAPI structures, Keycloak admin client | ≈2.5k (tenant 1.2k · policy 1.3k) |
+| `core/` | Tenant model (Project, ProjectMembership, invite, Keycloak org ↔ HAPI partition, `provisioning` status + startup reconciler ≈60 — ADR-007), AccessPolicy translator + parameter substitution + two-phase write check + criteria validator, shared types | HAPI structures, Keycloak admin client | ≈2.6k (tenant 1.3k · policy 1.3k) |
 | `server/` | Spring Boot app: embedded HAPI JPA, interceptor registration, `/oauth2/*` passthrough + reshaped discovery/logout, `/auth/me`, `/admin/*`, `AccessPolicy` provider, subscription delivery table + poller + signature + AuditEvent (≈150), outbound allow-list (≈40), GraphQL depth/cost limits (≈50), `X-Project`, bootstrap | `core/`, HAPI JPA, Spring Security | ≈1.8k |
 | `client/` | `BigBookClient`, auth flows, typed CRUD/search/batch/binary, Spring Boot starter | HAPI generic client | ≈0.8k |
 | `bots/` | v0.2 — Camel bot runtime + starter | `core/` | 0 in v0.1 |
@@ -196,7 +283,7 @@ Human attribution is absent in v0.1 (audited to the ClientApplication); v0.2 add
 | BB-R-002 Search | — | all params, chaining, includes, `_filter`, paging, `SUBSETTED` tagging (V9) | `_project`/`_compartment` → partition; page links echo caller params |
 | BB-R-003 GraphQL | — | `$graphql`, server-wide introspection toggle | PRESHOW field hiding applies unchanged; enforcing depth/cost limits (≈50) |
 | BB-R-004 Auth | login flows, OIDC grants, MFA, brokering, claims mappers, JWKS | — | `/oauth2/*` passthrough, discovery + logout reshape, `/auth/me`, JWT validation filter |
-| BB-R-005 Tenancy | organisations, users, confidential clients, required actions | partitions | Project/Membership/invite model, org↔partition map, super-admin bootstrap, `X-Project` |
+| BB-R-005 Tenancy | organisations, users, confidential clients, required actions | partitions | Project/Membership/invite model, org↔partition map, super-admin bootstrap, `X-Project`, `provisioning` anchor rows + reconciler (ADR-007) |
 | BB-R-006 Access policies | — | AuthorizationInterceptor, SearchNarrowingInterceptor, FhirQueryRuleTester, hooks | AccessPolicy translator, hiddenFields, readonlyFields, params, defaults, denial log, `AccessPolicy` provider |
 | BB-R-007 Subscriptions | — | matching (`SubscriptionMatcherInterceptor`, registry) | delivery table + 1 s poller, retry/backoff (pinned numbers), interaction-filter extension, author-policy check (enforced), X-Signature, AuditEvent per attempt, `$resend`, outbound allow-list, write-time criteria validation |
 | BB-R-008 n8n | — | rest-hook source | recipe + example workflow (`full` only) |

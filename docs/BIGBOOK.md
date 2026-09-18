@@ -54,7 +54,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 
 Target: 5–10k lines. If a feature needs more than that, the answer is a third-party component, not code.
 
-**v0.1 glue tally (reconciled 2026-09-17, `docs/inventory/`): ≈5.1k lines.** `core/` ≈2.5k (tenant model 1.2k · policy adapter 1.3k incl. two-phase write check and criteria validator), `server/` ≈1.8k (OAuth passthrough + reshape, `/auth/me`, admin routes, subscription delivery table + poller + signature + AuditEvent ≈150, outbound allow-list ≈40, GraphQL limits ≈50, `X-Project`, bootstrap), `client/` ≈0.8k. Known v0.2 additions from the inventory: token-response wrapper + mappers, extended-meta interceptor, OperationOutcome slug mapping and the eight T29 alignments, `$export` poll aliasing ≈200, no-op PUT 304 ≈40, CLI Basic-auth filter ≈80, token-exchange glue ≈150 (D9, `full`). Detail per module in `ARCHITECTURE.md` §3.
+**v0.1 glue tally (2026-09-18): ≈5.2k lines.** `core/` ≈2.6k (tenant model 1.3k incl. the ADR-007 `provisioning` anchor rows and startup reconciler ≈60 · policy adapter 1.3k incl. two-phase write check and criteria validator), `server/` ≈1.8k (OAuth passthrough + reshape, `/auth/me`, admin routes, subscription delivery table + poller + signature + AuditEvent ≈150, outbound allow-list ≈40, GraphQL limits ≈50, `X-Project`, bootstrap), `client/` ≈0.8k. Known v0.2 additions from the inventory: token-response wrapper + mappers, extended-meta interceptor, OperationOutcome slug mapping and the eight T29 alignments, `$export` poll aliasing ≈200, no-op PUT 304 ≈40, CLI Basic-auth filter ≈80, token-exchange glue ≈150 (D9, `full`). Detail per module in `ARCHITECTURE.md` §3.
 
 ## Non-goals
 
@@ -105,8 +105,9 @@ Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.
 - ADR-002 Event bus — decided (2026-09-17): none, both profiles, v0.1–v0.2. Postgres delivery table polled in the Big Book JVM; cron on a DB-backed lock; bots in-process. Two verify-first items on issue #12.
 - ADR-003 Medplum wire-compatibility scope — decided: B in v0.1, SDK-grade C in v0.2, app-grade C v1.0.
 - ADR-004 Admin UI path — decided: Appsmith CE overlay v0.1 (service-account); Vaadin Flow v0.3 (issue #1 closed the `@medplum/app` path).
-- ADR-005 SMART-on-FHIR Keycloak extension.
+- ADR-005 SMART-on-FHIR Keycloak extension — open; candidates evaluated 2026-09-18 (Alvearie, zedwerks, none); four verify items pending.
 - ADR-006 HAPI deployment topology — decided: embedded in the Big Book JVM; `lite` = three containers.
+- ADR-007 Cross-store provisioning — decided (2026-09-18): reconcile, never compensate; `provisioning` anchor row, idempotent steps by stable key, startup reconciler; BB-R-005.13; two verify items on issue #4.
 
 ## How the three surfaces work
 
