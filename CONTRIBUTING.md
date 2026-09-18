@@ -49,7 +49,7 @@ Upstream versions live in `deploy/versions.env` and nowhere else; don't bump the
 - Branch from `main`: `issue-<n>-short-name`.
 - **Small PRs.** One issue per PR. If an issue turns out to be two, say so and split it.
 - **Every public behaviour has a test.** Wire issues: an integration test against the `lite` stack. Glue issues: unit tests plus the issue's exit test.
-- **The line-count rule.** Big Book's custom code is capped at 5–10k lines total. Every glue PR states its net line change in the description. Issue #7 has a hard limit of 1.6k; others report. If you find yourself writing something HAPI or Keycloak already does, stop — the answer is configuration, not code.
+- **The line-count rule.** Big Book's custom code is capped at 5–10k lines total. Every glue PR states its net line change in the description. Issue #7 has a hard limit of 1.6k; others report. **If an issue's actual exceeds its [ARCHITECTURE §3](docs/ARCHITECTURE.md#3-module-map) share, the PR stops for a decision.** Lines for work already inside the v0.1 estimate are actuals against that share and need no matching removal; the "sign-off line reached" note in `docs/BIGBOOK.md` is about *new scope*, which does need one. If you find yourself writing something HAPI or Keycloak already does, stop — the answer is configuration, not code.
 - **Docs in the same PR.** If your change touches a requirement, an ADR or a guide, the doc change ships with the code. `docs/` is not a separate task.
 - **Don't invent.** Where Medplum has a header, extension URL, status code or JSON shape for something, use it verbatim. Where Medplum has a bug, don't reproduce it — record the divergence in `docs/guides/medplum-parity.md`.
 

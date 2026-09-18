@@ -48,7 +48,7 @@ Note: area 2 produced a third category. **V** = *verify on pinned HAPI* — a qu
 
 | # | Question | Why it matters |
 |---|---|---|
-| V1 | Does `SearchNarrowingInterceptor` fire for `_include`/`_revinclude` sub-queries, and does `GraphQLProvider` resolve through the DAO/interceptor chain? | A miss is a **cross-tenant data leak**, not a feature gap. Medplum gets both right by construction. Measure before any other BB-R-002/003 work. |
+| V1 | Does `SearchNarrowingInterceptor` fire for `_include`/`_revinclude` sub-queries, and does `GraphQLProvider` resolve through the DAO/interceptor chain? | A miss is a **cross-tenant data leak**, not a feature gap. Medplum gets both right by construction. Measure before any other BB-R-002/003 work. **Measured 2026-09-18 on HAPI 8.12.1 (issue #9): no for narrowing; storage pointcuts do fire. ADR-001 amended.** |
 | V2 | Which `_filter` operators does HAPI support, and do dotted paths work? | Decides whether BB-R-002.5's `wire HAPI` fill is right or becomes glue/v0.2. |
 | V3 | Does HAPI's GraphQL provider cover connections (`PatientConnection`) and mutations (`PatientCreate`)? | BB-R-003.2/3 already say "measure the gap; if absent, defer v0.2, not glue". |
 | V4 | Are runtime-registered custom `SearchParameter` resources enabled by default, and does `$reindex` pick them up? | A free capability gain over Medplum if yes. |

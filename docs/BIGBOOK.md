@@ -26,7 +26,7 @@ License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production use
 | Full-text search | HAPI + OpenSearch | decided, `full` profile only |
 | Identity, OIDC/OAuth2, users, MFA | Keycloak | decided |
 | SMART-on-FHIR scopes | Keycloak extension (pick a maintained one) | open |
-| Access policies | Medplum-shaped `AccessPolicy` → HAPI `AuthorizationInterceptor` + `SearchNarrowingInterceptor` rules, Big Book hooks; no external engine | decided |
+| Access policies | Medplum-shaped `AccessPolicy` → HAPI `AuthorizationInterceptor` rules (type × interaction) + Big Book hooks (`PRESEARCH_REGISTERED` narrowing, `PREACCESS` drop, field hooks); no external engine (ADR-001, amended 2026-09-18) | decided |
 | Multi-tenancy | HAPI partitioning keyed on Keycloak organisation | decided |
 | Consent | HAPI `ConsentInterceptor` | decided |
 | Bots (dev-authored, in-JVM) | Apache Camel routes on Spring Boot | decided |

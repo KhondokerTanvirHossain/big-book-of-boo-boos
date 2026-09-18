@@ -101,7 +101,7 @@ Docs scrape used for the "Doc ref" column: 2026-09-12, `docs/medplum-docs/` (git
 
 | V | Question | Issue | Blocking |
 |---|---|---|---|
-| V1 | `SearchNarrowingInterceptor` fires for `_include`/`_revinclude` sub-queries; `GraphQLProvider` resolves through the DAO/interceptor chain | #7, #9, #10 | **yes** |
+| V1 | `SearchNarrowingInterceptor` fires for `_include`/`_revinclude` sub-queries; `GraphQLProvider` resolves through the DAO/interceptor chain — **answered 2026-09-18: no / storage pointcuts only** (issue #9; ADR-001 amended) | #7, #9, #10 | **yes** |
 | V2 | `_filter` operators and dotted paths | #9 | no |
 | V3 | GraphQL connections and mutations | #10 | no |
 | V4 | Runtime custom `SearchParameter` + `$reindex` | #9 | no |
