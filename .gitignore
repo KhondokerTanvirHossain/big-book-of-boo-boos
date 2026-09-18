@@ -1,3 +1,10 @@
 # Offline Medplum docs snapshot and the scraper that builds it (tools/scrape_medplum_docs.py)
 docs/medplum-docs/
 tools/
+
+# Build output
+.gradle/
+build/
+
+# Local compose configuration; only .env.example is committed
+.env

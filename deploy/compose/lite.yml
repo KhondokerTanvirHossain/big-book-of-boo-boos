@@ -1,0 +1,127 @@
+# Big Book `lite`: Postgres + Keycloak + Big Book server (HAPI FHIR JPA embedded, ADR-006).
+# Three containers, no more. Self-contained on purpose: this one file is the install.
+#
+#   curl -O https://raw.githubusercontent.com/KhondokerTanvirHossain/big-book-of-boo-boos/main/deploy/compose/lite.yml
+#   docker compose -f lite.yml up -d
+#
+# No .env is required. Secrets you do not supply are generated on first boot into the
+# `secrets` volume. Every key: docs/guides/config.md. Image tags default to the pins in
+# deploy/versions.env; deploy/ci/check-deploy.sh keeps the two in step.
+name: bigbook
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17.11-alpine}
+    restart: unless-stopped
+    # Postgres is first in the start order, so it is the one that writes the first-boot secrets.
+    entrypoint: ["/bin/sh", "/bigbook/first-boot.sh"]
+    command: ["postgres"]
+    environment:
+      POSTGRES_USER: bigbook
+      POSTGRES_DB: bigbook
+      POSTGRES_PASSWORD_FILE: /run/bigbook/postgres-password
+      BIGBOOK_SUPPLIED_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      BIGBOOK_SUPPLIED_KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
+    configs:
+      - source: first-boot
+        target: /bigbook/first-boot.sh
+      - source: init-db
+        target: /docker-entrypoint-initdb.d/10-bigbook.sql
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - secrets:/run/bigbook
+    healthcheck:
+      # over TCP: the image's init-time server listens on the socket only, and must not count as ready
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U bigbook -d bigbook"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_VERSION:-26.7.4}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        export KC_DB_PASSWORD="$$(cat /run/bigbook/postgres-password)"
+        export KC_BOOTSTRAP_ADMIN_PASSWORD="$$(cat /run/bigbook/keycloak-admin-password)"
+        exec /opt/keycloak/bin/kc.sh start
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: bigbook
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    volumes:
+      - secrets:/run/bigbook:ro
+    ports:
+      - "8081:8080"
+    healthcheck:
+      # the image has no curl or wget; /health/ready is on the management port. Match the status line, not the
+      # body: while Keycloak is still bootstrapping the body is an overall DOWN that contains passing sub-checks
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000
+          && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          && grep -q '^HTTP/1.1 200' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 300s
+      start_interval: 5s
+
+  bigbook:
+    image: ${BIGBOOK_IMAGE:-ghcr.io/khondokertanvirhossain/bigbook-server}:${BIGBOOK_VERSION:-0.1.0-SNAPSHOT}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      BIGBOOK_BASE_URL: ${BIGBOOK_BASE_URL:-http://localhost:8080/}
+    volumes:
+      - secrets:/run/bigbook:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 300s
+      start_interval: 5s
+
+volumes:
+  postgres-data:
+  secrets:
+
+configs:
+  first-boot:
+    content: |
+      #!/bin/sh
+      # Each secret is written once: the supplied value if there is one, else 32 random characters.
+      # Never rewritten, because Postgres and Keycloak only read these on their own first boot.
+      set -eu
+      umask 022
+      secret() {
+        [ ! -s "/run/bigbook/$$1" ] || return 0
+        if [ -n "$$2" ]; then
+          printf '%s' "$$2" > "/run/bigbook/$$1"
+        else
+          head -c 256 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32 > "/run/bigbook/$$1"
+        fi
+      }
+      secret postgres-password "$$BIGBOOK_SUPPLIED_POSTGRES_PASSWORD"
+      secret keycloak-admin-password "$$BIGBOOK_SUPPLIED_KEYCLOAK_ADMIN_PASSWORD"
+      exec docker-entrypoint.sh "$$@"
+  init-db:
+    content: |
+      -- First boot only. Keycloak gets its own database; HAPI's tables live in schema `hapi`
+      -- of the `bigbook` database, beside the `bigbook` schema Big Book's own tables will use.
+      CREATE DATABASE keycloak;
+      CREATE SCHEMA hapi;

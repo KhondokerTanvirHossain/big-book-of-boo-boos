@@ -272,7 +272,7 @@ Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds t
 | `server/` | Spring Boot app: embedded HAPI JPA, interceptor registration, `/oauth2/*` passthrough + reshaped discovery/logout, `/auth/me`, `/admin/*`, `AccessPolicy` provider, subscription delivery table + poller + signature + AuditEvent (≈150), outbound allow-list (≈40), GraphQL depth/cost limits (≈50), `X-Project`, bootstrap | `core/`, HAPI JPA, Spring Security | ≈1.8k |
 | `client/` | `BigBookClient`, auth flows, typed CRUD/search/batch/binary, Spring Boot starter | HAPI generic client | ≈0.8k |
 | `bots/` | v0.2 — Camel bot runtime + starter | `core/` | 0 in v0.1 |
-| `deploy/` | `compose/lite.yml`, `compose/admin.yml`, `compose/full.yml`, Helm chart, `versions.yaml` | — | not Java; uncounted |
+| `deploy/` | `compose/lite.yml`, `compose/admin.yml`, `compose/full.yml`, Helm chart, `versions.env` | — | not Java; uncounted |
 | `app/lowcode/` | Appsmith app JSON, vendored AccessPolicy JSON schema, `SCREENS.md` | Big Book REST | uncounted |
 
 ## 4. Boundaries — one row per brick
@@ -303,7 +303,7 @@ Rule: if a row's Big Book cell grows past what's listed, check HAPI's intercepto
 
 **Config precedence.** Environment variables → Helm `values.yaml` / compose `.env` → defaults in `application.yml`. Every key in `docs/guides/config.md` with its default. Secrets never in values files: `lite` reads them from env or Keycloak client attributes; `full` from Vault.
 
-**Version pinning.** `deploy/versions.yaml` is the single source for every upstream (Postgres, Keycloak, HAPI, Appsmith, and all `full` images) and is consumed by compose, Helm values and the Java build properties. One upgrade cadence; the CI e2e smoke runs the pinned set on `lite` and `lite+admin`.
+**Version pinning.** `deploy/versions.env` is the single source for every upstream (Postgres, Keycloak, HAPI, Appsmith, and all `full` images) and is consumed by compose, Helm values and the Java build properties. One upgrade cadence; the CI e2e smoke runs the pinned set on `lite` and `lite+admin`.
 
 ## 6. Out of scope for this document
 
