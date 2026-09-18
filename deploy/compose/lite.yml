@@ -48,7 +48,8 @@ services:
       - |
         export KC_DB_PASSWORD="$$(cat /run/bigbook/postgres-password)"
         export KC_BOOTSTRAP_ADMIN_PASSWORD="$$(cat /run/bigbook/keycloak-admin-password)"
-        exec /opt/keycloak/bin/kc.sh start
+        export BIGBOOK_KEYCLOAK_CLIENT_SECRET="$$(cat /run/bigbook/keycloak-client-secret)"
+        exec /opt/keycloak/bin/kc.sh start --import-realm
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
@@ -57,6 +58,10 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
+    configs:
+      # imported once; Keycloak skips a realm that already exists
+      - source: realm
+        target: /opt/keycloak/data/import/bigbook-realm.json
     volumes:
       - secrets:/run/bigbook:ro
     ports:
@@ -76,6 +81,8 @@ services:
       start_period: 300s
       start_interval: 5s
 
+  # No depends_on keycloak: bootstrap retries until Keycloak answers, which also covers Keycloak restarting
+  # later and Kubernetes, where depends_on does not exist. The two boot in parallel.
   bigbook:
     image: ${BIGBOOK_IMAGE:-ghcr.io/khondokertanvirhossain/bigbook-server}:${BIGBOOK_VERSION:-0.1.0-SNAPSHOT}
     restart: unless-stopped
@@ -84,12 +91,17 @@ services:
         condition: service_healthy
     environment:
       BIGBOOK_BASE_URL: ${BIGBOOK_BASE_URL:-http://localhost:8080/}
+      # required: the server refuses to start without it, and says so in its log
+      BIGBOOK_ADMIN_EMAIL: ${BIGBOOK_ADMIN_EMAIL:-}
+      # optional: when empty, one is generated and logged once
+      BIGBOOK_ADMIN_PASSWORD: ${BIGBOOK_ADMIN_PASSWORD:-}
     volumes:
       - secrets:/run/bigbook:ro
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/actuator/health"]
+      # readiness, not liveness: UP only after first-boot bootstrap has finished
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/actuator/health/readiness"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -118,6 +130,7 @@ configs:
       }
       secret postgres-password "$$BIGBOOK_SUPPLIED_POSTGRES_PASSWORD"
       secret keycloak-admin-password "$$BIGBOOK_SUPPLIED_KEYCLOAK_ADMIN_PASSWORD"
+      secret keycloak-client-secret ""
       exec docker-entrypoint.sh "$$@"
   init-db:
     content: |
@@ -125,3 +138,35 @@ configs:
       -- of the `bigbook` database, beside the `bigbook` schema Big Book's own tables will use.
       CREATE DATABASE keycloak;
       CREATE SCHEMA hapi;
+  realm:
+    # a copy of deploy/keycloak/bigbook-realm.json ($ doubled for compose); deploy/ci/check-deploy.sh keeps them identical
+    content: |
+      {
+        "realm": "bigbook",
+        "enabled": true,
+        "organizationsEnabled": true,
+        "roles": {
+          "realm": [
+            { "name": "super-admin", "description": "Big Book super-admin (BB-R-005.7)" }
+          ]
+        },
+        "clients": [
+          {
+            "clientId": "bigbook-server",
+            "name": "Big Book server",
+            "secret": "$${BIGBOOK_KEYCLOAK_CLIENT_SECRET}",
+            "publicClient": false,
+            "standardFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": true
+          }
+        ],
+        "users": [
+          {
+            "username": "service-account-bigbook-server",
+            "enabled": true,
+            "serviceAccountClientId": "bigbook-server",
+            "clientRoles": { "realm-management": ["realm-admin"] }
+          }
+        ]
+      }

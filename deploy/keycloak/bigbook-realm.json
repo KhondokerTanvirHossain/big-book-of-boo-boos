@@ -1,0 +1,29 @@
+{
+  "realm": "bigbook",
+  "enabled": true,
+  "organizationsEnabled": true,
+  "roles": {
+    "realm": [
+      { "name": "super-admin", "description": "Big Book super-admin (BB-R-005.7)" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bigbook-server",
+      "name": "Big Book server",
+      "secret": "${BIGBOOK_KEYCLOAK_CLIENT_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-bigbook-server",
+      "enabled": true,
+      "serviceAccountClientId": "bigbook-server",
+      "clientRoles": { "realm-management": ["realm-admin"] }
+    }
+  ]
+}

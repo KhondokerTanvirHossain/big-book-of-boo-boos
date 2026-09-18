@@ -16,6 +16,16 @@ subprojects {
         mavenCentral()
     }
 
+    // Spring logs through spring-jcl. HAPI and RESTEasy each drag in another commons-logging implementation;
+    // with those on the classpath Spring's own messages, startup failures included, go missing.
+    configurations.configureEach {
+        exclude(group = "commons-logging", module = "commons-logging")
+        exclude(group = "org.jboss.logging", module = "commons-logging-jboss-logging")
+        // RESTEasy (Keycloak admin client) brings org.jboss:jandex 2.x; Hibernate needs io.smallrye:jandex 3.x.
+        // Same classes under two coordinates, so Gradle sees no conflict, and in the boot jar 2.x wins by name.
+        exclude(group = "org.jboss", module = "jandex")
+    }
+
     plugins.withType<JavaPlugin> {
         extensions.configure<JavaPluginExtension> {
             toolchain {

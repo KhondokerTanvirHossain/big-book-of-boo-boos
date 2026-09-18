@@ -10,4 +10,5 @@ pluginManagement {
 
 rootProject.name = "big-book"
 
+include("core")
 include("server")

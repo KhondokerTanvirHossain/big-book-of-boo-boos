@@ -5,6 +5,8 @@
 set -eu
 cd "$(dirname "$0")/../.."
 LIMIT=600
+# the one value an install must supply (issue #3); CI has no .env
+export BIGBOOK_ADMIN_EMAIL="${BIGBOOK_ADMIN_EMAIL:-root@bigbook.test}"
 compose() { docker compose -f deploy/compose/lite.yml "$@"; }
 
 start=$(date +%s)
@@ -21,6 +23,12 @@ curl -fsS http://localhost:8080/fhir/R4/metadata | grep -q '"resourceType": *"Ca
   || { echo "FAIL: /fhir/R4/metadata did not return a CapabilityStatement"; exit 1; }
 curl -fsSL -o /dev/null http://localhost:8081/admin/master/console/ \
   || { echo "FAIL: Keycloak admin console not reachable"; exit 1; }
+curl -fsS -o /dev/null http://localhost:8081/realms/bigbook \
+  || { echo "FAIL: realm bigbook was not imported"; exit 1; }
+compose logs bigbook | grep -q 'Bootstrap complete' \
+  || { echo "FAIL: healthy without a completed bootstrap"; exit 1; }
+compose logs bigbook | grep -q 'Generated super-admin password' \
+  || { echo "FAIL: no BIGBOOK_ADMIN_PASSWORD was given, yet none was generated and logged"; exit 1; }
 
 result="lite boot: ${elapsed} s to three healthy containers (limit ${LIMIT} s)"
 echo "$result"

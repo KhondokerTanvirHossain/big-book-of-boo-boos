@@ -31,14 +31,16 @@ Prerequisites: **Docker Compose ≥ 2.23.1** and **JDK 21**. The build tool is *
 ```
 git clone https://github.com/KhondokerTanvirHossain/big-book-of-boo-boos
 cd big-book-of-boo-boos
-./gradlew build                                      # compiles, runs the tests (they start Postgres in Docker)
-docker compose --env-file deploy/versions.env \
+./gradlew build                                      # compiles, runs the tests (they start Postgres and Keycloak in Docker)
+BIGBOOK_ADMIN_EMAIL=you@example.org docker compose --env-file deploy/versions.env \
   -f deploy/compose/lite.yml -f deploy/compose/build.yml up -d --build
 ```
 
-The second command is `lite` with the server image built from your checkout (`build.yml`) instead of pulled. When all three containers are `healthy`, `curl http://localhost:8080/fhir/R4/metadata` answers. `deploy/ci/lite-boot.sh` is the timed boot CI runs; [docs/guides/install.md](docs/guides/install.md) is what users see.
+The last command is `lite` with the server image built from your checkout (`build.yml`) instead of pulled. When all three containers are `healthy`, `curl http://localhost:8080/fhir/R4/metadata` answers. `deploy/ci/lite-boot.sh` is the timed boot CI runs; [docs/guides/install.md](docs/guides/install.md) is what users see.
 
 Why Gradle (decided in issue #2): `deploy/versions.env` is the single file where upstream versions are pinned, and the build has to read its HAPI and Spring Boot versions from it. Gradle does that in a few lines of `settings.gradle.kts`; Maven resolves dependency versions before any plugin could load such a file. HAPI's own build is Maven, so its dependency management is imported as a platform (`hapi-fhir-bom`), not inherited.
+
+**Green tests are not enough for a dependency change.** The tests run on Gradle's classpath; the container runs the boot jar, which orders jars by name. Two artifacts that ship the same classes under different coordinates (issue #3: `org.jboss:jandex` 2.x from RESTEasy against Hibernate's `io.smallrye:jandex` 3.x) pass every test and crash the container. Run `deploy/ci/lite-boot.sh` after touching dependencies; CI does.
 
 Upstream versions live in `deploy/versions.env` and nowhere else; don't bump them in a feature PR. Spring Boot follows the Boot line HAPI is built against, so those two move together.
 
