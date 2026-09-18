@@ -40,8 +40,8 @@ jobs:
     timeout-minutes: 30
     env:
       # Not published yet, so the image comes from a registry on the runner and is pulled like any other.
+      # Only the repository is overridden; the tag is lite.yml's own default, BIGBOOK_VERSION from versions.env.
       BIGBOOK_IMAGE: localhost:5000/bigbook-server
-      BIGBOOK_VERSION: ci
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
