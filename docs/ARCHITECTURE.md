@@ -1,6 +1,6 @@
 # Big Book — Architecture
 
-> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed, reconciled 2026-09-17) or ADR-001/002/003/004/006/007 (HAPI JPA embedded in the Big Book server; `lite` = three containers; no event bus; reconcile-never-compensate provisioning). Status: **current** (2026-09-18: §2(e)–(g) create-project, invite, browser login per ADR-007; §3 glue tally 5.5k). If code and this file disagree, code wins — then fix this file.
+> One page. Last artefact before development. Everything here is already decided in `BIGBOOK.md`, `REQUIREMENTS.md` (v0.1 blessed, reconciled 2026-09-17) or ADR-001/002/003/004/006/007 (HAPI JPA embedded in the Big Book server; `lite` = three containers; no event bus; reconcile-never-compensate provisioning). Status: **current** (2026-09-18: §2(e)–(g) create-project, invite, browser login per ADR-007; §3 glue tally 5.5k; §3.1 per-issue estimate added 2026-09-19). If code and this file disagree, code wins — then fix this file.
 
 ## 1. Components — `lite`, with `full` and `admin` overlays dashed
 
@@ -275,6 +275,27 @@ Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds t
 | `bots/` | v0.2 — Camel bot runtime + starter | `core/` | 0 in v0.1 |
 | `deploy/` | `compose/lite.yml`, `compose/admin.yml`, `compose/full.yml`, Helm chart, `versions.env` | — | not Java; uncounted |
 | `app/lowcode/` | Appsmith app JSON, vendored AccessPolicy JSON schema, `SCREENS.md` | Big Book REST | uncounted |
+
+### 3.1 Per-issue glue estimate
+
+What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its share here, the PR stops for a decision.* Derived from the §3 module shares and the ADR budgets. **Source** says where a number comes from; **(g)** marks a split nobody has decided, made so that each module's rows add up to its §3 share. A guessed figure is a tripwire, not a target: crossing it starts a conversation. Lines are main Java only; tests, SQL, YAML and shell are uncounted. Replace an estimate with the actual when the issue merges.
+
+| Issue | `core/` tenant | `core/` policy | `server/` | `client/` | Total | Source |
+|---|---|---|---|---|---|---|
+| #2 `lite` skeleton | — | — | **237 actual** | — | **237 actual** | PR #23 |
+| #3 bootstrap | **182 actual** | — | **152 actual** | — | **334 actual** | PR #25 |
+| #4 tenant model | ≈750 (g) | — | ≈200: `X-Project` ≈30 (BB-R-005.11) + partition identity and project routes ≈170 (g) | — | ≈950 | ADR-007: reconciler ≈60, inside the 750. ADR-001 charges defaults/promote-demote ≈150 to BB-R-005; placed here (g). Tenant split #4 : #6 = 2 : 1 of what #3 left (g) |
+| #5 auth surface | — | — | ≈450 (g) | — | ≈450 | remainder of `server/` |
+| #6 invite, client routes | ≈370 (g) | — | ≈200 (g) | — | ≈570 | ADR-007 same pattern as #4; split (g) |
+| #7 access policy | — | 1.4–1.6k | ≈150 `AccessPolicy` provider and wiring (g) | — | ≈1.55–1.75k | ADR-001 line items: translator 400, `PRESEARCH` 120, `PREACCESS` 150, `hiddenFields` 150, `readonlyFields` 100, post-write 50, write-time validation 60, params 100, interaction split 60, subscriptions 100, denial log 50, backstop 20 = 1,360, + extras ≤200. **Ceiling 1.6k on `core/policy`** (issue #7). The provider is listed under `server/` in §3 and is not in ADR-001's items |
+| #9 search | — | — | ≈50 `_project` / `_compartment` → partition (g) | — | ≈50 | "glue, small" (issue #9, T26) |
+| #10 GraphQL | — | — | ≈50 | — | ≈50 | BB-R-003: 40–60 |
+| #12 subscriptions | — | — | ≈210: delivery ≈150 (ADR-002), interaction filter ≈20 (BB-R-007), allow-list ≈40 | — | ≈210 | ADR-002; policy-side enforcement ≈100 is in #7's budget |
+| #15 Java SDK | — | — | — | ≈800 | ≈800 | §3 |
+| #17 observability | — | — | ≈100 MDC, JSON log fields (g) | — | ≈100 | remainder of `server/` |
+| **Module total** | **≈1.3k** | **1.4–1.6k** | **≈1.8k** | **≈0.8k** | **≈5.3–5.5k** | §3 |
+
+Wire-only issues (#8, #11, #13, #14, #16, #18, #22) carry no glue share; glue appearing in one of them is new scope (`docs/BIGBOOK.md`: it needs a matching removal).
 
 ## 4. Boundaries — one row per brick
 
