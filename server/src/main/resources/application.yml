@@ -1,0 +1,52 @@
+# Defaults only. Precedence is Spring Boot's: environment → this file (BB-R-011.3).
+# No secret has a default here; every bigbook.* key is documented in docs/guides/config.md.
+spring:
+  application:
+    name: bigbook-server
+  main:
+    # HAPI JPA's own beans are circular (SearchParamRegistry ↔ InMemoryResourceMatcher); the upstream starter sets this too
+    allow-circular-references: true
+  autoconfigure:
+    # HAPI's classpath carries these libraries; Boot must not start them on its own (the upstream starter excludes the same)
+    exclude:
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration
+      - org.springframework.boot.autoconfigure.thymeleaf.ThymeleafAutoConfiguration
+  config:
+    # lite writes its generated secrets as files into this directory (see deploy/compose/lite.yml)
+    import: optional:configtree:/run/bigbook/
+  datasource:
+    url: jdbc:postgresql://postgres:5432/bigbook?currentSchema=hapi
+    username: bigbook
+    password: ${postgres-password}
+  # flyway-core arrives with HAPI's migrator; nothing of Big Book's to migrate until the bigbook schema exists
+  flyway:
+    enabled: false
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+      hibernate.hbm2ddl.auto: update
+      hibernate.jdbc.batch_size: 20
+      hibernate.cache.use_query_cache: false
+      hibernate.cache.use_second_level_cache: false
+      # lite has no full-text index; full wires OpenSearch
+      hibernate.search.enabled: false
+
+# springdoc arrives with HAPI's OpenAPI module; Big Book's API description is the CapabilityStatement
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

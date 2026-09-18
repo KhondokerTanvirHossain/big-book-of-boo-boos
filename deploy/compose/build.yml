@@ -1,0 +1,10 @@
+# Contributor overlay: build the Big Book server image from this checkout instead of pulling it.
+#
+#   ./gradlew :server:bootJar
+#   docker compose --env-file deploy/versions.env -f deploy/compose/lite.yml -f deploy/compose/build.yml up -d --build
+services:
+  bigbook:
+    build:
+      context: ../../server
+      args:
+        TEMURIN_VERSION: ${TEMURIN_VERSION:?run with --env-file deploy/versions.env}

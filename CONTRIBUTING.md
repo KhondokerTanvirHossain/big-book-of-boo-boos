@@ -26,14 +26,21 @@ Comment "I'll take this" on the issue. A maintainer assigns it. If nothing happe
 
 ## 3. Set up
 
+Prerequisites: **Docker Compose ≥ 2.23.1** and **JDK 21**. The build tool is **Gradle** (Kotlin DSL), through the wrapper; don't install Gradle yourself.
+
 ```
 git clone https://github.com/KhondokerTanvirHossain/big-book-of-boo-boos
 cd big-book-of-boo-boos
-docker compose -f deploy/compose/lite.yml up -d     # once issue #2 lands
-./gradlew build                                      # build tool confirmed by issue #2
+./gradlew build                                      # compiles, runs the tests (they start Postgres in Docker)
+docker compose --env-file deploy/versions.env \
+  -f deploy/compose/lite.yml -f deploy/compose/build.yml up -d --build
 ```
 
-JDK 21 and Gradle are the working assumption until issue #2 fixes them. Upstream versions are pinned in one file under `deploy/`; don't bump them in a feature PR.
+The second command is `lite` with the server image built from your checkout (`build.yml`) instead of pulled. When all three containers are `healthy`, `curl http://localhost:8080/fhir/R4/metadata` answers. `deploy/ci/lite-boot.sh` is the timed boot CI runs; [docs/guides/install.md](docs/guides/install.md) is what users see.
+
+Why Gradle (decided in issue #2): `deploy/versions.env` is the single file where upstream versions are pinned, and the build has to read its HAPI and Spring Boot versions from it. Gradle does that in a few lines of `settings.gradle.kts`; Maven resolves dependency versions before any plugin could load such a file. HAPI's own build is Maven, so its dependency management is imported as a platform (`hapi-fhir-bom`), not inherited.
+
+Upstream versions live in `deploy/versions.env` and nowhere else; don't bump them in a feature PR. Spring Boot follows the Boot line HAPI is built against, so those two move together.
 
 ## 4. Do the work
 
