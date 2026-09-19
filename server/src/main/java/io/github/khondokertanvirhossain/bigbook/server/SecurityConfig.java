@@ -1,6 +1,7 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
 import ca.uhn.fhir.context.FhirContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
 import java.time.Duration;
 import org.springframework.context.annotation.Bean;
@@ -59,6 +60,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(server -> server.jwt(Customizer.withDefaults()))
                 // not a bean: Boot would also register it on the servlet container, outside the security chain
                 .addFilterAfter(new ProjectContextFilter(store, outcomes), AuthorizationFilter.class)
+                .addFilterAfter(new ConditionalUpdateIdFilter(outcomes, new ObjectMapper()), ProjectContextFilter.class)
                 .build();
     }
 }

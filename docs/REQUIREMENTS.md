@@ -43,6 +43,8 @@ What a client can do at `/fhir/R4`:
 
 Verify: **V7** audit `GET /fhir/R4/metadata` on a fresh `lite` stack — every operation HAPI advertises is either intended or denied by the default policy (Medplum advertises one; no client reads `/metadata`). **V8** `$expand` on base R4 ValueSets and the LOINC/RxNorm/ICD-10 content upload story.
 
+**V7/V8 answered 2026-09-19 (issue #8).** V7: the CapabilityStatement advertises HAPI's superset — `$expunge`, `$meta*`, `hapi.fhir.merge`/`undo-merge` on all 146 types, `$reindex`/`$mark-all-resources-for-reindexing`/`$get-resource-counts`/`$reindex-terminology`/`hapi.fhir.replace-references` at system level, plus `$everything`, `$lastn`, `$document`, `$snapshot`, `$lookup`, `$subsumes`, `$translate`, `$validate-code`, `$validate`. None is denied yet: the default access policy is issue #7, and the operations that mutate or expose across projects (`$expunge`, `$reindex`, `hapi.fhir.*`, `$get-resource-counts`) must be denied there or disabled. **V8: pass** — base R4 `ValueSet/$expand`, `$lookup` and `$validate-code` all work with no content upload, so BB-R-001.11 stays **v0.1**; LOINC/RxNorm/ICD-10 remain an upload story (`$upload-external-code-system`), unscheduled.
+
 Exit test: transaction bundle creating Patient + Observation with a `urn:uuid` reference returns 200; a transaction whose second entry fails leaves no first entry behind (D11); `GET Patient/id/_history` shows 2 versions after a PUT; deleted Patient returns 410; if V8 passed, `ValueSet/$expand?url=http://hl7.org/fhir/ValueSet/administrative-gender` returns 4 codes.
 
 ## BB-R-002 Search
