@@ -278,7 +278,7 @@ Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds t
 
 ### 3.1 Per-issue glue estimate
 
-What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its share here, the PR stops for a decision.* Derived from the §3 module shares and the ADR budgets. **Source** says where a number comes from; **(g)** marks a split nobody has decided, made so that each module's rows add up to its §3 share. A guessed figure is a tripwire, not a target: crossing it starts a conversation. Lines are main Java only; tests, SQL, YAML and shell are uncounted. Replace an estimate with the actual when the issue merges.
+What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its share here, the PR stops for a decision.* Derived from the §3 module shares and the ADR budgets. **Source** says where a number comes from; **(g)** marks a split nobody has decided, made so that each module's rows add up to its §3 share. A guessed figure is a tripwire, not a target: crossing it starts a conversation. **Module shares are indicative; the total and the per-issue rows are what the CONTRIBUTING §4 rule tests against.** Lines are main Java only; tests, SQL, YAML and shell are uncounted. Replace an estimate with the actual when the issue merges.
 
 | Issue | `core/` tenant | `core/` policy | `server/` | `client/` | Total | Source |
 |---|---|---|---|---|---|---|
@@ -295,7 +295,7 @@ What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its s
 | #17 observability | — | — | ≈100 MDC, JSON log fields (g) | — | ≈100 | remainder of `server/` |
 | **Module total** | **≈1.3k** | **1.4–1.6k** | **≈1.8k** | **≈0.8k** | **≈5.3–5.5k** | §3 |
 
-**Module drift after #4 (2026-09-19), for a decision, not yet applied to §3:** with #2–#4 as actuals and the rest as estimated, `server/` adds up to ≈1.93k against its 1.8k share, and `core/` tenant to ≈0.76k against 1.3k. The total is unchanged; the tenant model turned out to be mostly request handling (`server/`) and little domain code (`core/`). Either rebalance the two module shares by ≈0.15–0.5k or treat `server/` 1.8k as the tripwire it now is.
+**Module drift after #4 (2026-09-19):** with #2–#4 as actuals and the rest as estimated, `server/` adds up to ≈1.93k against its 1.8k share, and `core/` tenant to ≈0.76k against 1.3k. The total is unchanged; the tenant model turned out to be mostly request handling (`server/`) and little domain code (`core/`). Decided 2026-09-19: module shares are indicative, so §3 is not rebalanced and this drift stops no PR.
 
 Wire-only issues (#8, #11, #13, #14, #16, #18, #22) carry no glue share; glue appearing in one of them is new scope (`docs/BIGBOOK.md`: it needs a matching removal).
 
