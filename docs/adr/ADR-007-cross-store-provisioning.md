@@ -28,5 +28,6 @@ Context: surfaced by the Architect while drawing `docs/ARCHITECTURE.md` §2(e) c
 Low. The step order is the same under compensation or reconciliation; reversing means adding delete calls per step and removing the reconciler. Trigger: none foreseen — reconciliation is the safer default at any scale.
 
 ## Open — Claude Code tasks, tracked on issue #4
-- Confirm Keycloak Admin REST returns 409 (not 400/500) on duplicate organisation alias and duplicate user email on the pinned version, so "already exists → continue" is a status check, not a search.
-- Confirm HAPI partition creation is idempotent by name or needs a lookup-then-create.
+- ~~Confirm Keycloak Admin REST returns 409 (not 400/500) on duplicate organisation alias and duplicate user email on the pinned version, so "already exists → continue" is a status check, not a search.~~ **Resolved 2026-09-19 on Keycloak 26.7.4 (issue #4): yes, 409 for both.** Also 409: duplicate organisation *name*, duplicate username, duplicate organisation member. Email matching is case-insensitive. Hence BB-R-005.14 and .15.
+- ~~Confirm HAPI partition creation is idempotent by name or needs a lookup-then-create.~~ **Resolved 2026-09-19 on HAPI 8.12.1 (issue #4): not idempotent; lookup-then-create.** A duplicate name is `HAPI-1309`, a duplicate id `HAPI-2366`. A partition can be created while partitioning is switched off.
+- **Retry key for create-project, decided in issue #4's PR, for the Architect to confirm:** the ADR says "retrying the same request resumes" but create-project carries no natural key. Implemented: the `id` when the super-admin supplies one; otherwise an unfinished (`provisioning`) project with the same name. Once a project is `active` its name keys nothing, so names may repeat.

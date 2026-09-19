@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.khondokertanvirhossain.bigbook.core.Project;
 import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ class BootstrapRunnerTest {
 
     private final TenantProvisioner provisioner = mock(TenantProvisioner.class);
     private final List<Duration> pauses = new ArrayList<>();
-    private final TenantProvisioner.Project project = new TenantProvisioner.Project(UUID.randomUUID(), 1, "Super Admin", "active");
+    private final Project project = new Project(UUID.randomUUID(), 1, "Super Admin", true, "active", "{}");
 
     private BootstrapRunner runner(String email, String password) {
         return new BootstrapRunner(new BigBookProperties.Admin(email, password), provisioner, Duration.ofSeconds(20), pauses::add);

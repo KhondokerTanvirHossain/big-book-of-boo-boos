@@ -3,6 +3,9 @@ package io.github.khondokertanvirhossain.bigbook.server;
 import ca.uhn.fhir.jpa.partition.IPartitionLookupSvc;
 import io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory;
 import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
+import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import java.util.concurrent.TimeUnit;
+import org.jboss.resteasy.client.jaxrs.internal.ResteasyClientBuilderImpl;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
@@ -25,12 +28,22 @@ public class TenantConfig {
                 .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
                 .clientId(properties.keycloak().clientId())
                 .clientSecret(properties.keycloak().clientSecret())
+                // a Keycloak that accepts the connection and then says nothing must fail the request, not hang it
+                .resteasyClient(new ResteasyClientBuilderImpl()
+                        .connectTimeout(5, TimeUnit.SECONDS)
+                        .readTimeout(15, TimeUnit.SECONDS)
+                        .build())
                 .build();
     }
 
     @Bean
-    public TenantProvisioner tenantProvisioner(JdbcClient jdbc, Keycloak keycloak, IPartitionLookupSvc partitions) {
-        return new TenantProvisioner(jdbc, new KeycloakDirectory(keycloak.realm(REALM)), partitions);
+    public TenantStore tenantStore(JdbcClient jdbc) {
+        return new TenantStore(jdbc);
+    }
+
+    @Bean
+    public TenantProvisioner tenantProvisioner(TenantStore store, Keycloak keycloak, IPartitionLookupSvc partitions) {
+        return new TenantProvisioner(store, new KeycloakDirectory(keycloak.realm(REALM)), partitions);
     }
 
     @Bean

@@ -4,19 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 /** The HTTP surface issue #2 promised: health, metadata, and a HAPI that really stores. */
 class BigBookServerApplicationTest extends LiteStackTest {
-
-    @Autowired
-    TestRestTemplate http;
 
     @Test
     void healthIsUp() {
@@ -48,15 +41,21 @@ class BigBookServerApplicationTest extends LiteStackTest {
 
     @Test
     void embeddedHapiStoresAndSearches() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.valueOf("application/fhir+json"));
-        String patient = "{\"resourceType\":\"Patient\",\"name\":[{\"family\":\"Rahman\"}]}";
+        String bearer = superAdminToken();
+        String family = "Rahman-" + java.util.UUID.randomUUID();
+        String patient = "{\"resourceType\":\"Patient\",\"name\":[{\"family\":\"" + family + "\"}]}";
 
-        ResponseEntity<JsonNode> created =
-                http.postForEntity("/fhir/R4/Patient", new HttpEntity<>(patient, headers), JsonNode.class);
-        ResponseEntity<JsonNode> found = http.getForEntity("/fhir/R4/Patient?name=Rahman", JsonNode.class);
+        ResponseEntity<JsonNode> created = call(HttpMethod.POST, "/fhir/R4/Patient", bearer, patient, JsonNode.class);
+        ResponseEntity<JsonNode> found = call(HttpMethod.GET, "/fhir/R4/Patient?name=" + family, bearer, null, JsonNode.class);
 
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(found.getBody().path("total").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void theFhirApiNeedsABearerTokenButTheCapabilityStatementDoesNot() {
+        assertThat(http.getForEntity("/fhir/R4/Patient", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(http.getForEntity("/admin/projects", String.class).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(http.getForEntity("/fhir/R4/metadata", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

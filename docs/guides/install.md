@@ -36,7 +36,7 @@ returns a FHIR `CapabilityStatement`.
 
 | What | Where |
 |---|---|
-| FHIR API | `http://localhost:8080/fhir/R4` |
+| FHIR API | `http://localhost:8080/fhir/R4` — needs a bearer token from realm `bigbook`, requested with scope `organization:<project id>`; only `/metadata` and the health endpoints are open |
 | Server health | `http://localhost:8080/actuator/health` |
 | Keycloak admin console | `http://localhost:8081`, user `admin` |
 | Postgres | not published to the host; `docker compose -f lite.yml exec postgres psql -U bigbook` |

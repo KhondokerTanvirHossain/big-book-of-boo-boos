@@ -12,18 +12,11 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.RealmResource;
-import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.OrganizationRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
-import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestClient;
 
 /** Issue #3's acceptance criteria, against the pinned Keycloak and Postgres. Bootstrap ran at context start. */
 class BootstrapTest extends LiteStackTest {
@@ -32,18 +25,14 @@ class BootstrapTest extends LiteStackTest {
     BootstrapRunner bootstrap;
 
     @Autowired
-    JdbcClient jdbc;
-
-    @Autowired
-    Keycloak keycloak;
-
-    @Autowired
     IPartitionLookupSvc partitions;
 
     @Test
     void firstStartCreatesTheSuperAdminProjectInAllThreeStores() {
-        Map<String, Object> project = jdbc.sql("SELECT * FROM bigbook.project").query().singleRow();
-        Map<String, Object> membership = jdbc.sql("SELECT * FROM bigbook.project_membership").query().singleRow();
+        // other suites create projects in the same stack; bootstrap's are the super-admin project and its one seat
+        Map<String, Object> project = jdbc.sql("SELECT * FROM bigbook.project WHERE super_admin").query().singleRow();
+        Map<String, Object> membership = jdbc.sql("SELECT * FROM bigbook.project_membership WHERE project_id = :project")
+                .param("project", project.get("id")).query().singleRow();
         String projectId = project.get("id").toString();
         RealmResource realm = keycloak.realm(TenantConfig.REALM);
         OrganizationRepresentation organization = realm.organizations().search(projectId, true, 0, 2).get(0);
@@ -76,8 +65,10 @@ class BootstrapTest extends LiteStackTest {
     @Test
     void aHalfFinishedBootstrapResumesWithoutDuplicates() throws Exception {
         String before = snapshot();
-        jdbc.sql("UPDATE bigbook.project SET status = 'provisioning'").update();
-        jdbc.sql("UPDATE bigbook.project_membership SET status = 'provisioning', user_id = NULL").update();
+        jdbc.sql("UPDATE bigbook.project SET status = 'provisioning' WHERE super_admin").update();
+        jdbc.sql("""
+                UPDATE bigbook.project_membership SET status = 'provisioning', user_id = NULL
+                WHERE project_id = (SELECT id FROM bigbook.project WHERE super_admin)""").update();
 
         bootstrap.run(new DefaultApplicationArguments());
 
@@ -86,27 +77,7 @@ class BootstrapTest extends LiteStackTest {
 
     @Test
     void theEnvAdminLogsInAndTheTokenCarriesTheSuperAdminRole() throws Exception {
-        // a throwaway public client: which clients the realm ships is issue #5's decision, and Keycloak's
-        // built-in admin-cli issues lightweight tokens that carry no roles
-        ClientRepresentation client = new ClientRepresentation();
-        client.setClientId("bootstrap-test");
-        client.setPublicClient(true);
-        client.setDirectAccessGrantsEnabled(true);
-        keycloak.realm(TenantConfig.REALM).clients().create(client).close();
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", "password");
-        form.add("client_id", "bootstrap-test");
-        form.add("username", ADMIN_EMAIL);
-        form.add("password", ADMIN_PASSWORD);
-
-        JsonNode token = RestClient.create()
-                .post()
-                .uri(keycloakUrl() + "/realms/bigbook/protocol/openid-connect/token")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(form)
-                .retrieve()
-                .body(JsonNode.class);
-        String payload = token.path("access_token").asText().split("\\.")[1];
+        String payload = token(ADMIN_EMAIL, ADMIN_PASSWORD, "openid").split("\\.")[1];
         JsonNode claims = new ObjectMapper().readTree(Base64.getUrlDecoder().decode(payload));
 
         assertThat(claims.path("email").asText()).isEqualTo(ADMIN_EMAIL);
