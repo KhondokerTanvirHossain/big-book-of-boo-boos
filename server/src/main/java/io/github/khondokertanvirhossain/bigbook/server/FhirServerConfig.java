@@ -18,6 +18,7 @@ import ca.uhn.fhir.jpa.model.config.PartitionSettings;
 import ca.uhn.fhir.jpa.provider.DaoRegistryResourceSupportedSvc;
 import ca.uhn.fhir.jpa.provider.IJpaSystemProvider;
 import ca.uhn.fhir.jpa.provider.JpaCapabilityStatementProvider;
+import ca.uhn.fhir.jpa.provider.ValueSetOperationProvider;
 import ca.uhn.fhir.jpa.search.DatabaseBackedPagingProvider;
 import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
 import ca.uhn.fhir.jpa.util.ResourceCountCache;
@@ -61,9 +62,23 @@ public class FhirServerConfig {
     /** Medplum's FHIR base path (BB-R-014.1). */
     public static final String FHIR_PATH = "/fhir/R4";
 
+    /**
+     * The datastore contract (issue #8, BB-R-001). Configuration only: every behaviour below is HAPI's,
+     * switched to what Medplum's contract requires, never to reproduce a Medplum defect.
+     */
     @Bean
     public JpaStorageSettings jpaStorageSettings() {
-        return new JpaStorageSettings();
+        JpaStorageSettings settings = new JpaStorageSettings();
+        // server-assigned UUIDs, as Medplum does (BB-R-001.9, T? REPO-002); HAPI's default is sequential numbers
+        settings.setResourceServerIdStrategy(JpaStorageSettings.IdStrategyEnum.UUID);
+        // a client id is accepted only to resolve urn:uuid inside a bundle, never on a plain create (D13)
+        settings.setResourceClientIdStrategy(JpaStorageSettings.ClientIdStrategyEnum.NOT_ALLOWED);
+        // a conditional delete that matches many is 412, not a mass delete (T19)
+        settings.setAllowMultipleDelete(false);
+        // BB-R-001.6 / D16: on by default, so a reference into another project is refused on write
+        settings.setEnforceReferentialIntegrityOnWrite(true);
+        settings.setEnforceReferentialIntegrityOnDelete(true);
+        return settings;
     }
 
     /** One project is one partition (issue #4). References across partitions stay HAPI's default: not allowed. */
@@ -97,7 +112,11 @@ public class FhirServerConfig {
 
     @Bean
     public DatabaseBackedPagingProvider databaseBackedPagingProvider() {
-        return new DatabaseBackedPagingProvider();
+        DatabaseBackedPagingProvider paging = new DatabaseBackedPagingProvider();
+        // _count cap 1000, inclusive, as the SDK expects (T45); page sizes are BB-R-002's, issue #9
+        paging.setDefaultPageSize(20);
+        paging.setMaximumPageSize(1000);
+        return paging;
     }
 
     @Bean
@@ -133,16 +152,20 @@ public class FhirServerConfig {
             ISearchParamRegistry searchParamRegistry,
             IValidationSupport validationSupport,
             DatabaseBackedPagingProvider pagingProvider,
+            ValueSetOperationProvider valueSetOperationProvider,
             TenantStore tenantStore,
             PartitionSettings partitionSettings) {
         RestfulServer server = new RestfulServer(systemDao.getContext());
         daoRegistry.setSupportedResourceTypes(systemDao.getContext().getResourceTypes());
         server.registerProviders(resourceProviders.createProviders());
         server.registerProvider(systemProvider);
+        // terminology operations on ValueSet; $lookup and $validate-code come with the generated providers
+        server.registerProvider(valueSetOperationProvider);
         server.setServerConformanceProvider(new JpaCapabilityStatementProvider(
                 server, systemDao, storageSettings, searchParamRegistry, validationSupport));
         server.setPagingProvider(pagingProvider);
         server.registerInterceptor(new PartitionInterceptor(tenantStore, partitionSettings));
+        server.registerInterceptor(new InterimOperationDenyInterceptor());
         server.setServerAddressStrategy(new HardcodedServerAddressStrategy(properties.fhirBaseUrl()));
         return server;
     }
