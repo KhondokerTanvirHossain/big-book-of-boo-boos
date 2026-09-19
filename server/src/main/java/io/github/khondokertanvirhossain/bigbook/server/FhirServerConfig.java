@@ -165,6 +165,7 @@ public class FhirServerConfig {
                 server, systemDao, storageSettings, searchParamRegistry, validationSupport));
         server.setPagingProvider(pagingProvider);
         server.registerInterceptor(new PartitionInterceptor(tenantStore, partitionSettings));
+        server.registerInterceptor(new InterimOperationDenyInterceptor());
         server.setServerAddressStrategy(new HardcodedServerAddressStrategy(properties.fhirBaseUrl()));
         return server;
     }
