@@ -30,6 +30,7 @@ Evidence gathered by the Architect; no decision. Requirement: BB-R-022 (v0.2). W
 Observations, not decisions:
 - Alvearie is the right design but the wrong era; adopting it means owning a port.
 - zedwerks is current but EHR-launch-centric and drags in a Context API service and Terraform — two things the `lite` and `full` profiles don't have.
+- `fhirUser` requires a claim that varies per organisation membership; stock mappers cannot express it and the ADR-003 wrapper cannot add claims. Whichever candidate wins must supply that mapper, or the "none" column becomes "none + one Big Book mapper JAR".
 - The "none" column covers everything except `aud` request-parameter validation and a standalone patient picker; the first is ~30 lines as a Keycloak authenticator **or** a check in Big Book's `/oauth2/authorize` redirect (Big Book already sits in front of it, ADR-003), the second is a v0.3-shaped UI question.
 
 Verify before deciding (Claude Code, on the pinned Keycloak):

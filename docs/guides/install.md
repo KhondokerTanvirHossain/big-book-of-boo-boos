@@ -38,7 +38,7 @@ returns a FHIR `CapabilityStatement`.
 |---|---|
 | FHIR API | `http://localhost:8080/fhir/R4` — needs a bearer token from realm `bigbook`, requested with scope `organization:<project id>`; only `/metadata` and the health endpoints are open |
 | Server health | `http://localhost:8080/actuator/health` |
-| Keycloak admin console | `http://localhost:8081`, user `admin` |
+| Keycloak admin console | `http://127.0.0.1:9080`, user `admin` — `lite` publishes only Big Book's port; the Keycloak admin console is reachable on an operator-only address (`KC_HOSTNAME_ADMIN`, `127.0.0.1` in compose) |
 | Postgres | not published to the host; `docker compose -f lite.yml exec postgres psql -U bigbook` |
 
 ## Your super-admin

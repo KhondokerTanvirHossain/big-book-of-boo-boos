@@ -79,7 +79,7 @@ sequenceDiagram
   SDK->>BB: POST /oauth2/token (client_credentials)
   BB->>KC: POST /realms/bigbook/protocol/openid-connect/token (passthrough)
   KC-->>BB: access_token {project, profile, membership}
-  BB-->>SDK: token (issuer = Big Book public URL)
+  BB-->>SDK: token (iss = <base-url>realms/bigbook)
 
   SDK->>BB: GET /fhir/R4/Patient?name=x  Bearer
   BB->>BB: validate JWT (JWKS cached) · MDC: request-id, project, user
@@ -261,7 +261,9 @@ sequenceDiagram
   APP->>BB: GET /auth/me  Bearer  → §2(b)
 ```
 
-Issuer = Big Book public URL because Keycloak `hostname` is set to it (ADR-003). Logout: `POST /oauth2/logout` Bearer → Big Book → Keycloak Admin REST session delete (re-shaped, ADR-003).
+Issuer = `<BIGBOOK_BASE_URL>realms/bigbook`: Keycloak `hostname` is set to Big Book's public URL and Keycloak appends `/realms/<realm>` (ADR-003). Discovery advertises the same string.
+
+**Keycloak's pages come through Big Book (ADR-003, 2026-09-19).** With the hostname pinned, every URL Keycloak emits — the login form's `action`, its redirects, its CSS and JS — is on Big Book's origin, so Big Book proxies two prefixes and nothing else. **Allow-list, the two positive prefixes only:** `/realms/<realm>/` (realm name fixed from config, never `/realms/master`, never a path parameter) and `/resources/`. Everything else on Keycloak's origin is **404 at Big Book**: `/admin/**`, `/realms/master/**`, `/metrics`, `/health`. Big Book's own Admin REST calls use the internal container address, never the proxy. `/realms/<realm>/account/**` is inside the allow-list and stays reachable — user-scoped, not admin. Proxy rules: forward `X-Forwarded-Host`/`-Proto`/`-Port` (`KC_PROXY_HEADERS=xforwarded`), pass `Set-Cookie` and 302 through unchanged, never follow redirects, stream bodies. `lite` publishes only Big Book's port; the admin console is reached via `KC_HOSTNAME_ADMIN` on an operator-only address (BB-R-011.9). In `full` the same prefixes route through Big Book, not Traefik→Keycloak. Logout: `POST /oauth2/logout` Bearer → Big Book → Keycloak Admin REST session delete (re-shaped, ADR-003).
 
 Verify-first (issue #5, wire not glue): (1) `organization:<alias>` scope binds the token to one organisation; (2) bare `organization` scope triggers the built-in organisation selector for multi-org users. If (2) is absent, project selection at login becomes a Big Book step — raised as a proposed ADR-008, not worked around.
 
@@ -285,7 +287,7 @@ What CONTRIBUTING §4 compares a PR against: *if an issue's actual exceeds its s
 | #2 `lite` skeleton | — | — | **237 actual** | — | **237 actual** | PR #23 |
 | #3 bootstrap | **182 actual** | — | **152 actual** | — | **334 actual** | PR #25 |
 | #4 tenant model | **205 actual** | — | **501 actual**: token validation and project resolution 172 (moved here from #5, 2026-09-19), partition identity and `_project`/`_compartment` 80, project routes 187, `OperationOutcome` writer 37, wiring 25 | — | **706 actual** | PR for #4. Estimate was ≈950 + the lines moved from #5, so the issue is inside its share; but the (g) split was wrong about *where*: ≈750 was guessed for `core/` and ≈200 for `server/`. Reconciler is 25 lines, not ≈60. Not built here, so not yet counted: `Project.owner` and user-scope rules (arrive with #6's member routes) |
-| #5 auth surface | — | — | ≈280 (g) | — | ≈280 | remainder of `server/`, less the 172 lines of token validation and project resolution that #4 took (decided 2026-09-19). Keeps `/oauth2/*` passthrough, reshaped endpoints, `/auth/me`, remaining claim mappers |
+| #5 auth surface | — | — | ≈310 (g) | — | ≈310 | remainder of `server/`, less the 172 lines of token validation and project resolution that #4 took (decided 2026-09-19), plus **30 for the Keycloak login/asset proxy** (ADR-003, 2026-09-19). Keeps `/oauth2/*` passthrough, reshaped endpoints, `/auth/me`, remaining claim mappers |
 | #6 invite, client routes | ≈370 (g) | — | ≈200 (g) | — | ≈570 | ADR-007 same pattern as #4; split (g) |
 | #7 access policy | — | 1.4–1.6k | ≈150 `AccessPolicy` provider and wiring (g) | — | ≈1.55–1.75k | ADR-001 line items: translator 400, `PRESEARCH` 120, `PREACCESS` 150, `hiddenFields` 150, `readonlyFields` 100, post-write 50, write-time validation 60, params 100, interaction split 60, subscriptions 100, denial log 50, backstop 20 = 1,360, + extras ≤200. **Ceiling 1.6k on `core/policy`** (issue #7). The provider is listed under `server/` in §3 and is not in ADR-001's items |
 | #8 datastore config | — | — | **181 actual**: conditional-update compat filter 108, interim operation deny 48 (removed by #7), HAPI config 25 | — | **181 actual** | wire + compat filter. Accepted against `server/` by the maintainer at 132; the interim `$expunge`/`$reindex`/`$get-resource-counts`/`hapi.fhir.*` deny added afterwards on the same instruction brings it to 181. 48 of those lines leave with #7 |
