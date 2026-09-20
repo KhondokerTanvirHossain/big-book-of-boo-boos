@@ -3,6 +3,7 @@ package io.github.khondokertanvirhossain.bigbook.server;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.khondokertanvirhossain.bigbook.core.InviteRequest;
 import io.github.khondokertanvirhossain.bigbook.core.Membership;
 import io.github.khondokertanvirhossain.bigbook.core.Project;
 import io.github.khondokertanvirhossain.bigbook.core.ProjectContext;
@@ -111,9 +112,139 @@ public class AdminProjectsController {
         return render(store.membership(seat.id()).orElseThrow());
     }
 
+    /**
+     * Invite (BB-R-005.4). **200 with the `ProjectMembership`, not 201** — Medplum's shape, and the one
+     * admin route `@medplum/core` types (D2). Big Book's payload in v0.1; byte-compat is v0.2 (BB-R-014.4).
+     *
+     * <p>`sendEmail` is honoured but SMTP is **issue #11**: with none configured the invite succeeds and says
+     * so in a warning `OperationOutcome`, rather than failing a seat that is otherwise complete (T5's shape).
+     */
+    @PostMapping("/{id}/invite")
+    public JsonNode invite(@RequestAttribute(ProjectContext.ATTRIBUTE) ProjectContext caller,
+            @PathVariable String id, @RequestBody ObjectNode body) {
+        Project project = administered(caller, id);
+        InviteRequest request = inviteRequest(body, caller);
+        if (request.email() == null || request.email().isBlank()) {
+            throw new TenantException(400, "An invite needs an email address.");
+        }
+        TenantProvisioner.Invited invited = provision(() -> provisioner.invite(project, request),
+                "invite " + request.email() + " to project " + project.id());
+
+        ObjectNode membership = (ObjectNode) render(invited.membership());
+        if (invited.sendEmail()) {
+            try {
+                provisioner.sendInviteEmail(invited.user().id());
+            } catch (RuntimeException noMail) {
+                // the seat is active; only the email failed. Medplum returns 200 with a warning here (T5).
+                log.warn("Invite for {} is active but no email was sent: {}", request.email(), noMail.toString());
+                membership.set("issue", warning("The membership was created but no invite email could be sent: "
+                        + noMail.getMessage() + " Configure SMTP (issue #11), or set sendEmail=false."));
+            }
+        }
+        return membership;
+    }
+
+    /**
+     * A machine identity (BB-R-005.5). 201 with the `ClientApplication`, secret included — and the secret
+     * stays readable on every admin read of it (D5), unlike a "shown once" flow.
+     */
+    @PostMapping("/{id}/client")
+    @ResponseStatus(HttpStatus.CREATED)
+    public JsonNode createClient(@RequestAttribute(ProjectContext.ATTRIBUTE) ProjectContext caller,
+            @PathVariable String id, @RequestBody ObjectNode body) {
+        Project project = administered(caller, id);
+        String name = body.path("name").asText("");
+        if (name.isBlank()) {
+            throw new TenantException(400, "A client needs a name.");
+        }
+        TenantProvisioner.ClientApplication client = provision(
+                () -> provisioner.createClient(project, name,
+                        body.hasNonNull("accessPolicy") ? body.get("accessPolicy").asText() : null),
+                "create client '" + name + "' in project " + project.id());
+        return renderClient(client.id().toString(), client.name(), client.secret(), client.membership());
+    }
+
+    /** The secret is readable here on every read, as in Medplum and Keycloak (D5). */
+    @GetMapping("/{id}/clients/{clientId}")
+    public JsonNode readClient(@RequestAttribute(ProjectContext.ATTRIBUTE) ProjectContext caller,
+            @PathVariable String id, @PathVariable String clientId) {
+        Project project = administered(caller, id);
+        Membership seat = store.memberships(project.id(), "ClientApplication").stream()
+                .filter(m -> ("ClientApplication/" + clientId).equals(m.profile()))
+                .findFirst()
+                .orElseThrow(() -> new TenantException(404, "ClientApplication " + clientId + " does not exist in this project."));
+        return renderClient(clientId, seat.email(), provisioner.clientSecret(clientId), seat);
+    }
+
     @ExceptionHandler(TenantException.class)
     public void refused(TenantException refusal, HttpServletResponse response) throws IOException {
         outcomes.write(response, refusal.status(), refusal.getMessage());
+    }
+
+    /** ADR-007: a step that fails leaves the row `provisioning` and the same request resumes it. */
+    private <T> T provision(java.util.function.Supplier<T> step, String what) {
+        try {
+            return step.get();
+        } catch (TenantException refusal) {
+            throw refusal;
+        } catch (RuntimeException failure) {
+            log.warn("Could not finish: {}; its row stays provisioning", what, failure);
+            throw new TenantException(503, "Could not finish: " + failure.getMessage()
+                    + ". Nothing was rolled back; retry the same request to resume.", failure);
+        }
+    }
+
+    private InviteRequest inviteRequest(ObjectNode body, ProjectContext caller) {
+        // `membership` wins over the deprecated top-level admin/accessPolicy/access (T5)
+        JsonNode membership = body.path("membership");
+        return new InviteRequest(
+                body.path("resourceType").asText("Practitioner"),
+                body.path("firstName").asText(null),
+                body.path("lastName").asText(null),
+                body.path("email").asText(null),
+                body.path("externalId").asText(null),
+                membership.hasNonNull("patient") ? membership.get("patient").path("reference").asText() : body.path("patient").asText(null),
+                body.path("scope").asText(null),
+                body.path("password").asText(null),
+                body.path("sendEmail").asBoolean(true),
+                body.path("mfaRequired").asBoolean(false),
+                admin(membership, body),
+                reference(membership.has("accessPolicy") ? membership.get("accessPolicy") : body.get("accessPolicy")),
+                (membership.has("access") ? membership.get("access") : body.get("access")) == null ? null
+                        : (membership.has("access") ? membership.get("access") : body.get("access")).toString(),
+                reference(membership.has("userConfiguration") ? membership.get("userConfiguration") : body.get("userConfiguration")),
+                caller.membership().id());
+    }
+
+    /** `membership.admin` wins over the deprecated top-level `admin`; absent from both means "not set" (T5). */
+    private static Boolean admin(JsonNode membership, ObjectNode body) {
+        if (membership.has("admin")) {
+            return membership.path("admin").asBoolean();
+        }
+        return body.has("admin") ? Boolean.valueOf(body.path("admin").asBoolean()) : null;
+    }
+
+    private static String reference(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        return node.isTextual() ? node.asText() : node.path("reference").asText(null);
+    }
+
+    private JsonNode renderClient(String clientId, String name, String secret, Membership seat) {
+        ObjectNode node = json.createObjectNode();
+        node.put("resourceType", "ClientApplication").put("id", clientId).put("name", name);
+        if (secret != null) {
+            node.put("secret", secret);
+        }
+        node.set("membership", render(seat));
+        return node;
+    }
+
+    private JsonNode warning(String message) {
+        ObjectNode outcome = json.createObjectNode();
+        outcome.put("severity", "warning").put("code", "incomplete").put("diagnostics", message);
+        return json.createArrayNode().add(outcome);
     }
 
     private static void requireSuperAdmin(ProjectContext caller) {
