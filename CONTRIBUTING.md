@@ -72,7 +72,7 @@ A maintainer reviews within a few days. Expect questions about scope more than s
 - Adds a container to `lite`.
 - Adds a feature that isn't in a `BB-R-` requirement. Open an issue proposing the requirement first.
 - Reimplements something HAPI, Keycloak or Postgres already does.
-- Adds Niramoy-, Baymax- or any-one-app-specific behaviour. Those live in their own repos.
+- Adds behaviour specific to any one consuming application. Those live in their own repos.
 - Bumps an upstream version outside the versions file.
 
 ## 8. Roles

@@ -445,3 +445,7 @@ Code reality: `MedplumClient` has ~100 public methods (Table A), of which ~35 ar
 | T53 | v1.0 app-grade line (ADR-003 / REQUIREMENTS.md v1.0 section) | Add the GraphQL schema-introspection divergence: `requestSchema` (`:2081-2147`) queries `StructureDefinitionList(_filter: "name eq X")` and `SearchParameterList(base: "X", _count: 100)`, and `requestProfileSchema` (`:2157-2194`) calls `StructureDefinition/$expand-profile`. Neither exists in HAPI. Harmless for SDK-grade (no headless flow calls them), blocking for `@medplum/react`/app-grade. |
 
 ---
+
+---
+
+*2026-09-20: the named application in this note is now `examples/reference-app/`; the inventory row is unchanged (this file is frozen).*

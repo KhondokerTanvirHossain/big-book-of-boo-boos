@@ -10,7 +10,7 @@ It is a **distribution, not a rewrite**. Every slot is filled by a battle-tested
 
 Reference product: Medplum (Apache 2.0). We match its concepts and, where cheap, its wire format. We do not port its code.
 
-License: Apache 2.0. Owner: Tanvir (personal/Elio project). First production users: Niramoy and Baymax — they consume Big Book as a dependency; nothing Niramoy-specific lives in this repo.
+License: Apache 2.0. Owner: Tanvir Hossain (personal project). Validated by the reference application in `examples/reference-app/` and by at least one real deployment before each tag. No application-specific code lives in this repo.
 
 ## Why it should exist
 
@@ -60,7 +60,7 @@ Target: 5–10k lines. If a feature needs more than that, the answer is a third-
 
 - Reimplementing any FHIR server function HAPI already has.
 - A custom auth server, policy engine, workflow engine, or UI framework.
-- Niramoy/Baymax-specific features. Those live in their own repos.
+- Features specific to any one consuming application. Those live in their own repos.
 - Feature parity with Medplum in v0.x. Parity is a v1 question.
 
 ## Principles
@@ -71,7 +71,7 @@ Target: 5–10k lines. If a feature needs more than that, the answer is a third-
 - **Contract, not defects.** We match Medplum's wire *contract* — paths, payload shapes, status codes, claims, headers — not its bugs. Where the inventory found Medplum behaving incorrectly (transactions silently downgraded to batches, a policy filter that fails open, an in-memory matcher that inverts `:not-in`, quantity search that ignores units, page links that drop `_summary`, a rest-hook policy check that is a no-op), Big Book does the correct thing and records the divergence in `docs/guides/medplum-parity.md` so nobody "fixes" it back. Bug-compatibility is never a requirement; a divergence is only wrong if it breaks a real `@medplum/core` call path.
 - **Pin everything.** One upgrade cadence for all upstreams; e2e smoke test runs the full stack in CI.
 - **Docs live here.** ADRs in `docs/adr/`, decisions in this file. No context outside the repo. The Medplum capability inventory (`docs/inventory/`, frozen at `fbc8e7b4b`) is the evidence behind REQUIREMENTS.md; re-run it, don't edit it.
-- **Dogfood.** Niramoy or Baymax runs each release before it's tagged.
+- **Dogfood.** A real application runs each release before it's tagged; the reference app's path runs in CI on every commit.
 
 ## Repo layout
 
@@ -92,9 +92,9 @@ examples/
 
 | Version | Scope | Exit criterion |
 |---|---|---|
-| v0.1 | `lite` profile: store, Keycloak auth, tenancy, access policies, subscriptions, Java SDK, low-code admin, NFR floor (BB-R-029) | Baymax reads/writes patient records through it |
-| v0.2 | Bot SDK, CLI, audit events, bulk export, `full` profile | Niramoy prescription module writes `MedicationRequest` via Big Book |
-| v0.3 | HL7v2 agent, terminology (Snowstorm), BD IG v1, proper admin UI | External pilot user outside Niramoy |
+| v0.1 | `lite` profile: store, Keycloak auth, tenancy, access policies, subscriptions, Java SDK, low-code admin, NFR floor (BB-R-029) | `examples/reference-app/` performs the full patient read/write path through the Java SDK alone, on a `lite` install, in CI |
+| v0.2 | Bot SDK, CLI, audit events, bulk export, `full` profile | The reference application writes `MedicationRequest` and `Observation` through a bot and the CLI on a `full` stack |
+| v0.3 | HL7v2 agent, terminology (Snowstorm), BD IG v1, proper admin UI | One deployment operated by someone who has never contributed, for 30 days |
 | v1.0 | Medplum wire-compat verified; docs site; 3+ external deployments | — |
 
 Start date: after Brain Plus go-live (1 Jan). v0.1 target: 3 months from start.

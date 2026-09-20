@@ -48,3 +48,7 @@ Resolved by issue #1 on 2026-09-12 (research against `medplum-server` 5.1.37, so
 ## Amendments
 
 - 2026-09-19 — #5: Keycloak login/asset proxy in both profiles; user-token claim contract reduced to `project`; `profile`/`membership` via `/auth/me` and per-request lookup.
+
+---
+
+*2026-09-20: the named application in this ADR is now `examples/reference-app/`; the decision is unchanged.*

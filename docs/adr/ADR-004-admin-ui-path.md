@@ -48,3 +48,7 @@ Verify on the pinned Appsmith CE version before building #16; record each as res
 1. REST datasource OAuth (client credentials) is datasource-level in CE — not a Business feature.
 2. Git-sync limits in CE; if unusable, JSON export/import is the commit path for `app/lowcode/bigbook-admin.json`.
 3. App auto-import at first boot is scriptable via the import API; else the manual import is documented in `docs/guides/admin-ui.md`.
+
+---
+
+*2026-09-20: the named application in this ADR is now `examples/reference-app/`; the decision is unchanged.*

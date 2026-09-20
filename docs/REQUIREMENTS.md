@@ -18,7 +18,7 @@
 
 # v0.1 — `lite` profile
 
-**Exit criterion (from roadmap):** Baymax reads and writes patient records through Big Book using the Java SDK, on a `lite` stack that installed in ≤10 minutes on a laptop.
+**Exit criterion (from roadmap):** `examples/reference-app/` reads and writes patient records through Big Book using the Java SDK, on a `lite` stack that installed in ≤10 minutes.
 
 `lite` = three containers: Postgres + Keycloak + Big Book server (HAPI FHIR JPA embedded in the Big Book JVM, ADR-006). No Redis, no event bus (ADR-002). Nothing else. Every v0.1 requirement must be satisfiable inside that set.
 
@@ -212,7 +212,7 @@ Fill: **glue** (Helm chart, compose, profiles, docs) · Version: v0.1 · Status:
 8. No Redis in `lite` and no rate limiter in v0.1 (D33, D36): every `redis.*` and `rateLimit*` key is dropped; BB-R-023 (v0.2) is Traefik. Medplum's `enabledSearchParameters` allow-list and `preCommitSubscriptionsEnabled` are dropped as keys — the HAPI data-level and interceptor equivalents exist natively (D39, D40). CORS: echo the request origin and set `Access-Control-Allow-Credentials: true`, never `*` (D43 — the SDK sends credentials on every call; Medplum ships `allowedOrigins: "*"`).
 9. `lite` publishes only Big Book's port; the Keycloak admin console is reachable on an operator-only address (`KC_HOSTNAME_ADMIN`, `127.0.0.1` in compose). Keycloak's login pages and assets reach the browser through Big Book's own origin (`/realms/<realm>/**`, `/resources/**` — ADR-003, issue #5).
 
-Exit test: fresh Ubuntu VM, `curl` + `docker compose up -d` with a `.env` of ≤6 lines, timer < 10 min, Baymax smoke script passes; `docs/guides/config.md` test passes.
+Exit test: fresh Ubuntu VM, `curl` + `docker compose up -d` with a `.env` of ≤6 lines, timer < 10 min, reference-app integration test passes; `docs/guides/config.md` test passes.
 
 ## BB-R-012 Java client SDK
 Medplum ref: `sdk/core` (MedplumClient), `api/`; `fhir-datastore/working-with-fhir`; inventory area 5.1
@@ -233,7 +233,7 @@ Fill: **glue** (thin layer over HAPI generic client + Keycloak) · Version: v0.1
 12. `executeBot` — **defer v0.2** (with BB-R-016; D52).
 13. `subscribeToCriteria` (WebSocket) — **defer v0.2** (with BB-R-025; D52).
 
-Exit test: Baymax's patient read/write path runs on the SDK alone — no raw HTTP (the escape hatch exists but is unused by Baymax).
+Exit test: `examples/reference-app/` runs the full patient read/write path on the SDK alone — no raw HTTP (the escape hatch exists but the reference app does not use it).
 
 ## BB-R-013 Admin UI (low-code)
 Medplum ref: `app/` (index, app-introduction, sign-in-page, admin-page, apps-tab, invite)

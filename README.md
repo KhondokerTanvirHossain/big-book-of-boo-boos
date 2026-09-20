@@ -63,9 +63,9 @@ Everything the SDK does is plain FHIR REST underneath: `POST /fhir/R4/Patient`, 
 
 | Version | Scope | Done when |
 |---|---|---|
-| v0.1 | `lite` profile: store, auth, projects, policies, subscriptions, SDK, admin console, performance floor | a real app reads and writes patients through the SDK on a laptop install |
+| v0.1 | `lite` profile: store, auth, projects, policies, subscriptions, SDK, admin console, performance floor | `examples/reference-app/` reads and writes patients through the Java SDK alone, on a laptop `lite` install, in CI |
 | v0.2 | Bot SDK (Camel), CLI, audit events, bulk export, `full` profile, Medplum SDK-grade compatibility | a prescription module writes `MedicationRequest` through it |
-| v0.3 | HL7v2 agent, terminology (Snowstorm), Bangladesh FHIR IG, built-in admin UI | first external pilot |
+| v0.3 | HL7v2 agent, terminology (Snowstorm), Bangladesh FHIR IG, built-in admin UI | one deployment operated by someone who has never contributed, for 30 days |
 | v1.0 | Medplum app-grade compatibility, docs site, 3+ external deployments | — |
 
 ## Non-goals
@@ -94,4 +94,4 @@ Apache 2.0. Big Book depends on HAPI FHIR (Apache 2.0), Keycloak (Apache 2.0), A
 
 ---
 
-*Big Book of Boo-Boos — a personal open-source project by [Tanvir Hossain](https://github.com/KhondokerTanvirHossain). First users: Baymax and Niramoy, Dhaka.*
+*Big Book of Boo-Boos — a personal open-source project by [Tanvir Hossain](https://github.com/KhondokerTanvirHossain). Maintained by Tanvir Hossain.*

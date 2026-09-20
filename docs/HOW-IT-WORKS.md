@@ -123,7 +123,7 @@ If she belongs to two projects, she picks one at login (the mechanism — Keyclo
 
 ## 6. An app stores and reads patient data
 
-*Who:* Baymax, as a `ClientApplication`. *Requirements:* BB-R-001, BB-R-002, BB-R-012. This is the v0.1 exit criterion.
+*Who:* a client application, authenticating as a `ClientApplication`. *Requirements:* BB-R-001, BB-R-002, BB-R-012. This is the v0.1 exit criterion.
 
 Through the Java SDK:
 
@@ -185,7 +185,7 @@ A `Subscription` is a standing instruction: "when a resource matching this searc
     { "url": "https://www.medplum.com/fhir/StructureDefinition/subscription-secret", "valueString": "…" } ] }
 ```
 
-When Baymax creates a Patient, within five seconds the endpoint receives a POST with the Patient as the body and an `X-Signature` header — an HMAC of the body with the secret — so the receiver can trust it. The subscription above fires on create only, not on update. It fires only for resources in its own project, and only for resources its author's access policy would let them read.
+When the client application creates a Patient, within five seconds the endpoint receives a POST with the Patient as the body and an `X-Signature` header — an HMAC of the body with the secret — so the receiver can trust it. The subscription above fires on create only, not on update. It fires only for resources in its own project, and only for resources its author's access policy would let them read.
 
 Delivery is durable: pending deliveries live in a Postgres table, so a restart doesn't lose them. A failed POST gets four attempts in total — three retries, at 20 s, 40 s and 80 s (the delay doubles each time and is capped at 8 h). Every attempt writes an `AuditEvent`, so "did it go out?" is a search: `GET /fhir/R4/AuditEvent?entity=Subscription/{id}&_sort=-date`. `POST /fhir/R4/Patient/{id}/$resend` fires it again on demand (project admins only).
 
@@ -233,6 +233,6 @@ Not v0.1: horizontal scaling, HA Postgres, multi-node subscriptions (single JVM 
 
 ## What is deliberately not here
 
-Big Book stores clinical data; it doesn't know what to do with it. There is no appointment screen, no prescription flow, no chart, no note template. Those belong to the app on top — Niramoy, Baymax, or yours. Medplum's `medplum-provider` is that app in their world; in ours it doesn't exist yet and isn't planned before v1.0.
+Big Book stores clinical data; it doesn't know what to do with it. There is no appointment screen, no prescription flow, no chart, no note template. Those belong to the app on top — the reference application, or yours. Medplum's `medplum-provider` is that app in their world; in ours it doesn't exist yet and isn't planned before v1.0.
 
 Full list: `docs/REQUIREMENTS.md` → Non-goals.
