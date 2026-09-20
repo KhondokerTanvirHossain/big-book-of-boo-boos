@@ -3,6 +3,7 @@ package io.github.khondokertanvirhossain.bigbook.server;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory;
 import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.UUID;
@@ -38,6 +39,9 @@ import org.testcontainers.utility.MountableFile;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 abstract class LiteStackTest {
 
+    /** What Big Book's public URL is in tests; Keycloak is pinned to it, as in lite.yml. */
+    static final String BASE_URL = "http://bigbook.test/";
+
     static final String ADMIN_EMAIL = "root@bigbook.test";
     static final String ADMIN_PASSWORD = UUID.randomUUID().toString();
     private static final String CLIENT_SECRET = UUID.randomUUID().toString();
@@ -53,6 +57,13 @@ abstract class LiteStackTest {
     static final GenericContainer<?> KEYCLOAK = new GenericContainer<>(System.getProperty("bigbook.test.keycloak-image"))
             .withCommand("start-dev", "--import-realm")
             .withEnv("BIGBOOK_KEYCLOAK_CLIENT_SECRET", CLIENT_SECRET)
+            // as deploy/compose/lite.yml runs it: the hostname is Big Book's origin and Keycloak trusts
+            // the proxy's forwarded headers, which is what makes its own pages work behind the proxy
+            .withEnv("KC_PROXY_HEADERS", "xforwarded")
+            .withEnv("KC_HOSTNAME_STRICT", "false")
+            // as lite.yml does: Keycloak's hostname is Big Book's public URL, so the issuer it stamps into
+            // tokens is <BASE_URL>realms/bigbook — the string #5 validates and discovery advertises
+            .withEnv("KC_HOSTNAME", BASE_URL)
             .withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of(System.getProperty("bigbook.repo-root"), "deploy/keycloak/bigbook-realm.json")),
                     "/opt/keycloak/data/import/bigbook-realm.json")
@@ -71,7 +82,7 @@ abstract class LiteStackTest {
     static void liteStack(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("bigbook.base-url", () -> "http://bigbook.test/");
+        registry.add("bigbook.base-url", () -> BASE_URL);
         registry.add("bigbook.admin.email", () -> ADMIN_EMAIL);
         registry.add("bigbook.admin.password", () -> ADMIN_PASSWORD);
         registry.add("bigbook.keycloak.url", LiteStackTest::keycloakUrl);
@@ -151,6 +162,8 @@ abstract class LiteStackTest {
         for (int i = 0; i + 1 < headers.length; i += 2) {
             httpHeaders.set(headers[i], headers[i + 1]);
         }
-        return http.exchange(url, method, new HttpEntity<>(body, httpHeaders), type);
+        // a URI, not a template: TestRestTemplate would otherwise re-encode %2F and %2e, which is exactly
+        // what the allow-list tests need to send through untouched
+        return http.exchange(URI.create(http.getRootUri() + url), method, new HttpEntity<>(body, httpHeaders), type);
     }
 }

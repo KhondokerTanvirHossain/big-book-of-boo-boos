@@ -22,9 +22,14 @@ total=$(compose ps -a --format '{{.Name}}' | wc -l | tr -d ' ')
 
 curl -fsS http://localhost:8080/fhir/R4/metadata | grep -q '"resourceType": *"CapabilityStatement"' \
   || { echo "FAIL: /fhir/R4/metadata did not return a CapabilityStatement"; exit 1; }
-curl -fsSL -o /dev/null http://localhost:8081/admin/master/console/ \
-  || { echo "FAIL: Keycloak admin console not reachable"; exit 1; }
-curl -fsS -o /dev/null http://localhost:8081/realms/bigbook \
+# the admin console is operator-only now: reachable on the loopback port, and NOT on Big Book's origin
+curl -fsSL -o /dev/null http://127.0.0.1:9080/admin/master/console/ \
+  || { echo "FAIL: Keycloak admin console not reachable on its operator-only address"; exit 1; }
+[ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/admin/master/console/)" = "404" ] \
+  || { echo "FAIL: Keycloak's admin console must be 404 on Big Book's origin (ADR-003 allow-list)"; exit 1; }
+curl -fsS -o /dev/null "http://localhost:8080/realms/bigbook/.well-known/openid-configuration" \
+  || { echo "FAIL: Keycloak's realm pages must be served through Big Book's origin"; exit 1; }
+curl -fsS -o /dev/null http://127.0.0.1:9080/realms/bigbook \
   || { echo "FAIL: realm bigbook was not imported"; exit 1; }
 compose logs bigbook | grep -q 'Bootstrap complete' \
   || { echo "FAIL: healthy without a completed bootstrap"; exit 1; }
@@ -34,15 +39,15 @@ compose logs bigbook | grep -q 'Generated super-admin password' \
 # Second start (issue #3): restart all three containers, keeping their logs, and require that nothing
 # changed in any of the three stores and that the generated password was not logged a second time.
 snapshot() {
-  token=$(curl -fsS -X POST http://localhost:8081/realms/master/protocol/openid-connect/token \
+  token=$(curl -fsS -X POST http://127.0.0.1:9080/realms/master/protocol/openid-connect/token \
       -d grant_type=password -d client_id=admin-cli -d username=admin \
       --data-urlencode "password=$(compose exec -T postgres cat /run/bigbook/keycloak-admin-password)" | jq -r .access_token)
   echo "# keycloak realm export"
   curl -fsS -X POST -H "Authorization: Bearer $token" \
-      "http://localhost:8081/admin/realms/bigbook/partial-export?exportClients=true&exportGroupsAndRoles=true" | jq -S .
+      "http://127.0.0.1:9080/admin/realms/bigbook/partial-export?exportClients=true&exportGroupsAndRoles=true" | jq -S .
   echo "# keycloak users and organisations"
-  curl -fsS -H "Authorization: Bearer $token" http://localhost:8081/admin/realms/bigbook/users | jq -S 'map({id, username})'
-  curl -fsS -H "Authorization: Bearer $token" http://localhost:8081/admin/realms/bigbook/organizations | jq -S 'map({id, alias})'
+  curl -fsS -H "Authorization: Bearer $token" http://127.0.0.1:9080/admin/realms/bigbook/users | jq -S 'map({id, username})'
+  curl -fsS -H "Authorization: Bearer $token" http://127.0.0.1:9080/admin/realms/bigbook/organizations | jq -S 'map({id, alias})'
   echo "# hapi partitions, bigbook rows"
   compose exec -T postgres psql -U bigbook -At \
       -c "SELECT part_id, part_name FROM hapi.hfj_partition ORDER BY 1" \

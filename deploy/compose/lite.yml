@@ -58,6 +58,12 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
+      # Keycloak's login pages and assets reach the browser through Big Book's origin (ADR-003, #5),
+      # so its own hostname is Big Book's public URL and the issuer is <base-url>realms/bigbook.
+      KC_HOSTNAME: ${BIGBOOK_BASE_URL:-http://localhost:8080/}
+      KC_PROXY_HEADERS: xforwarded
+      # the admin console is the one thing not proxied: operator-only, on the loopback port below
+      KC_HOSTNAME_ADMIN: http://127.0.0.1:9080
     configs:
       # imported once; Keycloak skips a realm that already exists
       - source: realm
@@ -65,7 +71,8 @@ services:
     volumes:
       - secrets:/run/bigbook:ro
     ports:
-      - "8081:8080"
+      # operator-only: bound to the loopback address, not published to the network (BB-R-011.9)
+      - "127.0.0.1:9080:8080"
     healthcheck:
       # the image has no curl or wget; /health/ready is on the management port. Match the status line, not the
       # body: while Keycloak is still bootstrapping the body is an overall DOWN that contains passing sub-checks
@@ -147,7 +154,10 @@ configs:
         "organizationsEnabled": true,
         "roles": {
           "realm": [
-            { "name": "super-admin", "description": "Big Book super-admin (BB-R-005.7)" }
+            {
+              "name": "super-admin",
+              "description": "Big Book super-admin (BB-R-005.7)"
+            }
           ]
         },
         "clients": [
@@ -166,7 +176,12 @@ configs:
             "username": "service-account-bigbook-server",
             "enabled": true,
             "serviceAccountClientId": "bigbook-server",
-            "clientRoles": { "realm-management": ["realm-admin"] }
+            "clientRoles": {
+              "realm-management": [
+                "realm-admin"
+              ]
+            }
           }
-        ]
+        ],
+        "accessTokenLifespan": 1800
       }
