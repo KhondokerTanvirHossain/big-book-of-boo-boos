@@ -4,7 +4,10 @@
   "organizationsEnabled": true,
   "roles": {
     "realm": [
-      { "name": "super-admin", "description": "Big Book super-admin (BB-R-005.7)" }
+      {
+        "name": "super-admin",
+        "description": "Big Book super-admin (BB-R-005.7)"
+      }
     ]
   },
   "clients": [
@@ -23,7 +26,12 @@
       "username": "service-account-bigbook-server",
       "enabled": true,
       "serviceAccountClientId": "bigbook-server",
-      "clientRoles": { "realm-management": ["realm-admin"] }
+      "clientRoles": {
+        "realm-management": [
+          "realm-admin"
+        ]
+      }
     }
-  ]
+  ],
+  "accessTokenLifespan": 1800
 }

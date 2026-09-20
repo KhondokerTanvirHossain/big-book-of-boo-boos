@@ -26,7 +26,7 @@ Comment "I'll take this" on the issue. A maintainer assigns it. If nothing happe
 
 ## 3. Set up
 
-Prerequisites: **Docker Compose ≥ 2.23.1** and **JDK 21**. `lite` publishes only Big Book's port; the Keycloak admin console is reachable on an operator-only address (`KC_HOSTNAME_ADMIN`, `127.0.0.1` in compose). The build tool is **Gradle** (Kotlin DSL), through the wrapper; don't install Gradle yourself.
+Prerequisites: **Docker Compose ≥ 2.23.1** and **JDK 21**. `lite` publishes only Big Book's port; the Keycloak admin console is reachable on an operator-only address (`KC_HOSTNAME_ADMIN`, `http://127.0.0.1:9080` in compose). The build tool is **Gradle** (Kotlin DSL), through the wrapper; don't install Gradle yourself.
 
 ```
 git clone https://github.com/KhondokerTanvirHossain/big-book-of-boo-boos
@@ -39,6 +39,8 @@ BIGBOOK_ADMIN_EMAIL=you@example.org docker compose --env-file deploy/versions.en
 The last command is `lite` with the server image built from your checkout (`build.yml`) instead of pulled. When all three containers are `healthy`, `curl http://localhost:8080/fhir/R4/metadata` answers. `deploy/ci/lite-boot.sh` is the timed boot CI runs; [docs/guides/install.md](docs/guides/install.md) is what users see.
 
 Why Gradle (decided in issue #2): `deploy/versions.env` is the single file where upstream versions are pinned, and the build has to read its HAPI and Spring Boot versions from it. Gradle does that in a few lines of `settings.gradle.kts`; Maven resolves dependency versions before any plugin could load such a file. HAPI's own build is Maven, so its dependency management is imported as a platform (`hapi-fhir-bom`), not inherited.
+
+**Negative security tests must send raw bytes, not templated URLs.** `TestRestTemplate.exchange(String, …)` treats its first argument as a URI *template* and re-encodes `%2f`, `%2e` and friends, so an allow-list test written that way sends something other than what it reads and proves nothing (issue #5). Pass a `java.net.URI`, as `LiteStackTest.call` does. And assert the objective — that the request never reached the protected component — not the status code, which varies by which layer rejects it.
 
 **Green tests are not enough for a dependency change.** The tests run on Gradle's classpath; the container runs the boot jar, which orders jars by name. Two artifacts that ship the same classes under different coordinates (issue #3: `org.jboss:jandex` 2.x from RESTEasy against Hibernate's `io.smallrye:jandex` 3.x) pass every test and crash the container. Run `deploy/ci/lite-boot.sh` after touching dependencies; CI does.
 

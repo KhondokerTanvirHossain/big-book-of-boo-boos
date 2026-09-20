@@ -16,6 +16,12 @@ One is required: `BIGBOOK_ADMIN_EMAIL`. The rest are optional.
 | `POSTGRES_PASSWORD` | `spring.datasource.password` | generated on first boot | `lite` | Password of the `bigbook` Postgres role, used by both Big Book and Keycloak. **First-boot input**: read once, when the database is created. |
 | `KEYCLOAK_ADMIN_PASSWORD` | none (Keycloak's `KC_BOOTSTRAP_ADMIN_PASSWORD`) | generated on first boot | `lite` | Password of Keycloak's first admin user, `admin`. **First-boot input**: read once, when Keycloak has no admin yet. |
 
+### Ports, and where Keycloak is
+
+`lite` publishes **only Big Book's port**, 8080. Keycloak's port is bound to `127.0.0.1:9080` and is not published to the network: the admin console is an operator-only address (`KC_HOSTNAME_ADMIN`, BB-R-011.9). Both are fixed in `deploy/compose/lite.yml`, not configurable by an environment variable.
+
+Browsers never need Keycloak's port. With Keycloak's `hostname` pinned to `BIGBOOK_BASE_URL`, its login pages and theme assets are served through Big Book's own origin under `/realms/<realm>/**` and `/resources/**`, and every other path on that origin is 404 (ADR-003 allow-list, issue #5).
+
 ### How the secrets travel
 
 No secret has a default anywhere in the repository (`deploy/ci/check-deploy.sh` checks). In `lite`, the Postgres container writes each secret once as a file into the `secrets` volume, mounted at `/run/bigbook/` in all three containers and read-only in two of them: `postgres-password`, `keycloak-admin-password` and `keycloak-client-secret`. The value is what you supplied in `.env`, or 32 random characters if you supplied nothing (the client secret is always generated). Big Book reads the directory through Spring's `configtree` import; Keycloak reads the files at start.

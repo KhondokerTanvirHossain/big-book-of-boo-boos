@@ -19,12 +19,15 @@ while IFS='=' read -r name value; do
 done < deploy/versions.env
 
 # A secret-looking key may only be empty, a ${...} reference, a $(...) command substitution, or a path under /run/.
+# A boolean or a number is not a secret either: Keycloak's realm JSON sets claim-mapper flags and token
+# lifespans on keys whose names contain 'token', and those values are configuration, not credentials (#5).
 # Known limit, accepted in issue #3: a value that *starts with* $( is treated as a reference, so
 # password=$(cat secret.txt) passes. The scan finds literals; it does not judge where a command reads from.
 # check-deploy-selftest.sh pins both sides of that line.
 leaks=$(grep -rnEi '(password|secret|token|api_?key|private_?key)[a-z0-9_.-]*"?[[:space:]]*[:=][[:space:]]*[^[:space:]]' \
     deploy server/src/main/resources core/src/main/resources \
-  | grep -vE '[:=][[:space:]]*"?(\$\$?\{|\$\$?\(|/run/)' || true)
+  | grep -vE '[:=][[:space:]]*"?(\$\$?\{|\$\$?\(|/run/)' \
+  | grep -vE '[:=][[:space:]]*"?(true|false|[0-9]+)"?,?[[:space:]]*$' || true)
 if [ -n "$leaks" ]; then
   echo "possible secret literal:"
   echo "$leaks"
