@@ -14,7 +14,8 @@ If the issue names an ADR under `docs/adr/`, read that too. ADRs are decisions a
 
 ## 2. Pick an issue
 
-- Everything is in the [`v0.1 lite` milestone](../../milestone/1). Issues are numbered in build order; each names what blocks it.
+- Everything is in the [`v0.1 lite` milestone](../../milestone/1). Each issue names what blocks it.
+- **Build order** (set 2026-09-21; issue numbers are not the order): #2 → #3 → #4 → #5 → #6 → #8 → #7 → #9 → #12 → #15 → #14 → #10 → #17 → #11 and #13 → #16 → #18 → #22 → #19. `Blocked by` lines agree with it; if you find one that does not, say so rather than working around it.
 - [`good first issue`](../../labels/good%20first%20issue) — wire-only work: configuring HAPI or Keycloak, writing a guide, a compose overlay. No architecture risk.
 - [`help wanted`](../../labels/help%20wanted) — open and unassigned.
 - `glue` — Big Book code. Read the ADR first.
@@ -52,6 +53,7 @@ Upstream versions live in `deploy/versions.env` and nowhere else; don't bump the
 - **Small PRs.** One issue per PR. If an issue turns out to be two, say so and split it.
 - **Every public behaviour has a test.** Wire issues: an integration test against the `lite` stack. Glue issues: unit tests plus the issue's exit test.
 - **The line-count rule.** Big Book's custom code is capped at 5–10k lines total. Every glue PR states its net line change in the description. Issue #7 has a hard limit of 1.6k; others report. **If an issue's actual exceeds its [ARCHITECTURE §3](docs/ARCHITECTURE.md#3-module-map) share (per issue: [§3.1](docs/ARCHITECTURE.md#31-per-issue-glue-estimate)), the PR stops for a decision.** Lines for work already inside the v0.1 estimate are actuals against that share and need no matching removal; the "sign-off line reached" note in `docs/BIGBOOK.md` is about *new scope*, which does need one. If you find yourself writing something HAPI or Keycloak already does, stop — the answer is configuration, not code.
+- **Types that make illegal states unrepresentable are not counted against the tripwire** — same footing as tests. A `CompiledPolicy` record, a sealed `Criteria` hierarchy, an ArchUnit rule that stops a layer being imported: these exist so a mistake cannot be written down, and counting them would push work towards the looser, cheaper shape. State them in the PR separately from the glue figure so the numbers stay comparable.
 - **Docs in the same PR.** If your change touches a requirement, an ADR or a guide, the doc change ships with the code. `docs/` is not a separate task.
 - **Don't invent.** Where Medplum has a header, extension URL, status code or JSON shape for something, use it verbatim. Where Medplum has a bug, don't reproduce it — record the divergence in `docs/guides/medplum-parity.md`.
 
