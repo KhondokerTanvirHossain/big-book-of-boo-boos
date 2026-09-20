@@ -86,6 +86,11 @@ public class FhirServerConfig {
     public PartitionSettings partitionSettings() {
         PartitionSettings settings = new PartitionSettings();
         settings.setPartitioningEnabled(true);
+        // A conditional create's match URL is recorded to catch concurrent duplicates. HAPI's default records
+        // it WITHOUT the partition, so `Practitioner?identifier=x` in project A blocks the same conditional
+        // create in project B — two tenants colliding on one email (found inviting the same person to two
+        // projects, issue #6). Partition-scoped is the only correct setting when a partition is a tenant.
+        settings.setConditionalCreateDuplicateIdentifiersEnabled(true);
         return settings;
     }
 

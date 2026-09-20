@@ -42,8 +42,12 @@ public class TenantConfig {
     }
 
     @Bean
-    public TenantProvisioner tenantProvisioner(TenantStore store, Keycloak keycloak, IPartitionLookupSvc partitions) {
-        return new TenantProvisioner(store, new KeycloakDirectory(keycloak.realm(REALM)), partitions);
+    public TenantProvisioner tenantProvisioner(TenantStore store, Keycloak keycloak, IPartitionLookupSvc partitions,
+            org.springframework.beans.factory.ObjectProvider<ca.uhn.fhir.jpa.api.dao.DaoRegistry> daoRegistry) {
+        // lazily: the DaoRegistry is built by HAPI's own configuration, which is not ready when this bean is
+        return new TenantProvisioner(store, new KeycloakDirectory(keycloak.realm(REALM)), partitions,
+                (project, request, email) -> new HapiProfileResources(daoRegistry.getObject())
+                        .ensureProfile(project, request, email));
     }
 
     @Bean

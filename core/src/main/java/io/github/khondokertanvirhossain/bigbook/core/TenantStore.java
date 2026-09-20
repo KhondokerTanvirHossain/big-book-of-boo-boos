@@ -12,7 +12,8 @@ public class TenantStore {
     private static final String PROJECT = "SELECT id, partition_id, name, super_admin, status, settings::text AS settings FROM bigbook.project";
     private static final String MEMBERSHIP = """
             SELECT id, project_id, email, user_id, profile, admin, status, access_policy,
-                   access::text AS access, user_configuration, invited_by
+                   access::text AS access, user_configuration, invited_by,
+                   user_type, user_scope, invited_by_membership
             FROM bigbook.project_membership""";
 
     private final JdbcClient jdbc;
@@ -90,13 +91,40 @@ public class TenantStore {
 
     /** Tx 1 of ADR-007 for a seat; the stable key is (project, email). */
     public void insertProvisioningMembership(UUID projectId, String email, boolean admin) {
+        insertProvisioningMembership(projectId, email, admin, "User", "server", null, null, null, null);
+    }
+
+    /**
+     * Tx 1 of ADR-007 for an invited seat or a client (issue #6). Idempotent on (project, email), which is
+     * what makes a retried invite resume the same row rather than open a second one.
+     */
+    public void insertProvisioningMembership(UUID projectId, String email, boolean admin, String userType,
+            String userScope, String accessPolicy, String access, String userConfiguration, UUID invitedBy) {
         jdbc.sql("""
-                INSERT INTO bigbook.project_membership (id, project_id, email, admin, status)
-                VALUES (:id, :project, :email, :admin, 'provisioning')
+                INSERT INTO bigbook.project_membership
+                    (id, project_id, email, admin, status, user_type, user_scope,
+                     access_policy, access, user_configuration, invited_by_membership)
+                VALUES (:id, :project, :email, :admin, 'provisioning', :userType, :userScope,
+                        :policy, coalesce(:access::jsonb, '[]'::jsonb), :configuration, :invitedBy)
                 ON CONFLICT (project_id, email) DO NOTHING""")
                 .param("id", UUID.randomUUID()).param("project", projectId)
                 .param("email", normalizeEmail(email)).param("admin", admin)
+                .param("userType", userType).param("userScope", userScope)
+                .param("policy", accessPolicy).param("access", access)
+                .param("configuration", userConfiguration).param("invitedBy", invitedBy)
                 .update();
+    }
+
+    public Optional<Membership> membershipByEmail(UUID projectId, String email) {
+        return jdbc.sql(MEMBERSHIP + " WHERE project_id = :project AND email = :email")
+                .param("project", projectId).param("email", normalizeEmail(email))
+                .query(Membership.class).optional();
+    }
+
+    /** Set once the profile resource exists in the project's partition (ADR-007 step 4). */
+    public void setMembershipProfile(UUID id, String profile) {
+        jdbc.sql("UPDATE bigbook.project_membership SET profile = :profile WHERE id = :id")
+                .param("id", id).param("profile", profile).update();
     }
 
     public void markMembershipActive(UUID projectId, String email, String userId) {

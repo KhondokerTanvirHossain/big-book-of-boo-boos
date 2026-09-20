@@ -23,11 +23,20 @@ public class TenantProvisioner {
     private final TenantStore store;
     private final KeycloakDirectory keycloak;
     private final IPartitionLookupSvc partitions;
+    private final ProfileResources profiles;
 
-    public TenantProvisioner(TenantStore store, KeycloakDirectory keycloak, IPartitionLookupSvc partitions) {
+    public TenantProvisioner(TenantStore store, KeycloakDirectory keycloak, IPartitionLookupSvc partitions,
+            ProfileResources profiles) {
         this.store = store;
         this.keycloak = keycloak;
         this.partitions = partitions;
+        this.profiles = profiles;
+    }
+
+    /** Creates the invitee's profile resource inside the project's HAPI partition. */
+    public interface ProfileResources {
+        /** @return the reference, e.g. {@code Practitioner/<id>}; idempotent on {@code identifier = email} */
+        String ensureProfile(Project project, InviteRequest request, String email);
     }
 
     /** The one super-admin project; idempotent, run on every start (issue #3). */
@@ -63,6 +72,75 @@ public class TenantProvisioner {
         }
         store.markMembershipActive(project.id(), normalized, userId);
     }
+
+    /**
+     * Invite (BB-R-005.4, ADR-007 §2(f)). Order: anchor row → Keycloak user → organisation membership and
+     * required actions → profile resource in the project's partition → {@code active} → email. Every step is
+     * idempotent by a stable key, so retrying the identical request resumes at the failed step and creates
+     * nothing twice. Nothing is deleted on failure.
+     *
+     * @return the seat, and whether its invite email still needs sending
+     */
+    public Invited invite(Project project, InviteRequest request) {
+        String email = TenantStore.normalizeEmail(request.email());
+        String scope = request.effectiveScope();
+        store.membershipByEmail(project.id(), email).ifPresent(existing -> {
+            // T6: the same email in two scopes in one project is a conflict, not a second seat
+            if (existing.active() && !scope.equals(existing.userScope())) {
+                throw new TenantException(409, "%s already has a %s-scoped membership in this project."
+                        .formatted(email, existing.userScope()));
+            }
+            if (existing.active()) {
+                throw new TenantException(409, email + " already has a membership in this project.");
+            }
+        });
+        store.insertProvisioningMembership(project.id(), email, request.effectiveAdmin(), "User", scope,
+                request.accessPolicy(), request.access(), request.userConfiguration(), request.invitedBy());
+
+        KeycloakDirectory.InvitedUser user = keycloak.ensureInvitedUser(
+                email, request.firstName(), request.lastName(), request.password(), request.mfaRequired());
+        keycloak.ensureOrganizationMember(keycloak.organizationId(project.id().toString()), user.id());
+
+        Membership seat = store.membershipByEmail(project.id(), email).orElseThrow();
+        String profile = profiles.ensureProfile(project, request, email);
+        store.setMembershipProfile(seat.id(), profile);
+        store.markMembershipActive(project.id(), email, user.id());
+        return new Invited(store.membership(seat.id()).orElseThrow(), user, request.sendEmail());
+    }
+
+    /**
+     * A machine identity (BB-R-005.5): Keycloak confidential client, {@code ClientApplication} profile and a
+     * membership. The client id is the resource id (D4) and the secret stays readable (D5).
+     */
+    public ClientApplication createClient(Project project, String name, String accessPolicy) {
+        UUID id = UUID.randomUUID();
+        // a client has no email; the id doubles as the stable key, which keeps ADR-007's shape
+        String key = id + "@clients.invalid";
+        store.insertProvisioningMembership(project.id(), key, false, "ClientApplication", "project",
+                accessPolicy, null, null, null);
+        KeycloakDirectory.ConfidentialClient client = keycloak.ensureConfidentialClient(
+                id.toString(), name, keycloak.organizationId(project.id().toString()));
+        Membership seat = store.membershipByEmail(project.id(), key).orElseThrow();
+        store.setMembershipProfile(seat.id(), "ClientApplication/" + id);
+        // the seat is keyed by the token's `sub`, which for a client is its service-account user
+        store.markMembershipActive(project.id(), key, client.serviceAccountUserId());
+        return new ClientApplication(id, name, client.secret(), store.membership(seat.id()).orElseThrow());
+    }
+
+    /** Keycloak's own invite email; needs SMTP, which is issue #11. */
+    public void sendInviteEmail(String userId) {
+        keycloak.sendInviteEmail(userId);
+    }
+
+    /** The client's secret, readable on every admin read (D5). */
+    public String clientSecret(String clientId) {
+        return keycloak.clientSecret(clientId);
+    }
+
+    /** @param sendEmail the caller asked for an email; whether one can be sent is issue #11's question */
+    public record Invited(Membership membership, KeycloakDirectory.InvitedUser user, boolean sendEmail) {}
+
+    public record ClientApplication(UUID id, String name, String secret, Membership membership) {}
 
     /**
      * Startup sweep (ADR-007): finish creates that were interrupted, report what still cannot finish.
