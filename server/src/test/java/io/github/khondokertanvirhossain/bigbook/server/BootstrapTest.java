@@ -6,7 +6,7 @@ import ca.uhn.fhir.jpa.entity.PartitionEntity;
 import ca.uhn.fhir.jpa.partition.IPartitionLookupSvc;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantProvisioner;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;

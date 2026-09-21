@@ -117,7 +117,7 @@ class TenantIsolationTest extends LiteStackTest {
         UUID projectC = createProject(superAdminToken(), "No seat");
         String outsider = "outsider-" + UUID.randomUUID() + "@bigbook.test";
         String outsiderId = seedUser(outsider);
-        new io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory(keycloak.realm(TenantConfig.REALM))
+        new io.github.khondokertanvirhossain.bigbook.core.tenant.KeycloakDirectory(keycloak.realm(TenantConfig.REALM))
                 .ensureOrganizationMember(keycloak.realm(TenantConfig.REALM).organizations().search(projectC.toString(), true, 0, 1).get(0).getId(), outsiderId);
 
         assertThat(status("/fhir/R4/Patient", tokenFor(outsider, projectC))).isEqualTo(HttpStatus.FORBIDDEN);

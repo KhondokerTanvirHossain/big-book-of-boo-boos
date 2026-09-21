@@ -5,7 +5,7 @@ import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
-import io.github.khondokertanvirhossain.bigbook.core.ProjectContext;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.ProjectContext;
 import java.util.Set;
 
 /**

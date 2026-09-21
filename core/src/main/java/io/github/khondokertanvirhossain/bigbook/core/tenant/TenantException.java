@@ -1,4 +1,4 @@
-package io.github.khondokertanvirhossain.bigbook.core;
+package io.github.khondokertanvirhossain.bigbook.core.tenant;
 
 /** A tenancy refusal with the HTTP status it maps to; rendered as an OperationOutcome at the edge. */
 public class TenantException extends RuntimeException {

@@ -1,4 +1,4 @@
-package io.github.khondokertanvirhossain.bigbook.core;
+package io.github.khondokertanvirhossain.bigbook.core.tenant;
 
 import ca.uhn.fhir.jpa.entity.PartitionEntity;
 import ca.uhn.fhir.jpa.partition.IPartitionLookupSvc;

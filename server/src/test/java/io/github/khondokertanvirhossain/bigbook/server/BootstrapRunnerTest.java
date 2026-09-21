@@ -12,8 +12,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.khondokertanvirhossain.bigbook.core.Project;
-import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.Project;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantProvisioner;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;

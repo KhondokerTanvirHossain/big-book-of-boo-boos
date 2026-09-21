@@ -1,7 +1,7 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
-import io.github.khondokertanvirhossain.bigbook.core.Project;
-import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.Project;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantProvisioner;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Base64;

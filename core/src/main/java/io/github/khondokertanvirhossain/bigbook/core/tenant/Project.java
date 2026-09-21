@@ -1,4 +1,4 @@
-package io.github.khondokertanvirhossain.bigbook.core;
+package io.github.khondokertanvirhossain.bigbook.core.tenant;
 
 import java.util.UUID;
 

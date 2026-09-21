@@ -1,4 +1,4 @@
-package io.github.khondokertanvirhossain.bigbook.core;
+package io.github.khondokertanvirhossain.bigbook.core.tenant;
 
 import jakarta.ws.rs.core.Response;
 import java.util.List;

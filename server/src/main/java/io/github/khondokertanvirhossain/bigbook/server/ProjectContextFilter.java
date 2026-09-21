@@ -1,10 +1,10 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
-import io.github.khondokertanvirhossain.bigbook.core.Membership;
-import io.github.khondokertanvirhossain.bigbook.core.Project;
-import io.github.khondokertanvirhossain.bigbook.core.ProjectContext;
-import io.github.khondokertanvirhossain.bigbook.core.TenantException;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.Membership;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.Project;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.ProjectContext;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantException;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -27,7 +27,7 @@ import ca.uhn.fhir.rest.server.HardcodedServerAddressStrategy;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.provider.ResourceProviderFactory;
 import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import org.hl7.fhir.r4.model.Bundle;

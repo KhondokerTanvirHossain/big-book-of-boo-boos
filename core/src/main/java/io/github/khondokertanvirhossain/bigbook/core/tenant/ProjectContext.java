@@ -1,4 +1,4 @@
-package io.github.khondokertanvirhossain.bigbook.core;
+package io.github.khondokertanvirhossain.bigbook.core.tenant;
 
 /**
  * Who is calling and which project the call acts on, resolved once per request from the bearer token.
@@ -10,7 +10,7 @@ package io.github.khondokertanvirhossain.bigbook.core;
 public record ProjectContext(Project project, Membership membership, boolean superAdmin) {
 
     /** Request attribute name; a literal because annotations need a constant. */
-    public static final String ATTRIBUTE = "io.github.khondokertanvirhossain.bigbook.core.ProjectContext";
+    public static final String ATTRIBUTE = "io.github.khondokertanvirhossain.bigbook.core.tenant.ProjectContext";
 
     public boolean mayAdminister(java.util.UUID projectId) {
         return superAdmin || (membership.admin() && membership.projectId().equals(projectId));
