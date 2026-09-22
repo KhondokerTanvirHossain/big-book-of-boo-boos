@@ -54,6 +54,11 @@ public record CompiledPolicy(boolean bypass, List<Entry> entries, List<String> p
          *
          * <p>This lives on the record rather than in the compiler because it is an invariant: a caller that
          * builds a {@code CompiledPolicy} by hand must not be able to route around it.
+         *
+         * <p><b>Counting (ruled 2026-09-22):</b> this line sits on both sides of the rule — it prevents an
+         * invalid state <i>and</i> it decides access. It is <b>excluded</b>, because T1 makes "a wildcard that
+         * includes {@code Project}" invalid by definition, so removing the line would make an invalid state
+         * representable. The call is written here rather than left silent.
          */
         public boolean covers(String type) {
             if (resourceType.equals(type)) {
