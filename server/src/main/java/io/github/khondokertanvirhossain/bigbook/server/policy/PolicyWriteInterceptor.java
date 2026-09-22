@@ -47,16 +47,27 @@ public class PolicyWriteInterceptor {
         this.denialLog = denialLog;
     }
 
-    /** Phase 1 on create: there is no existing resource, so only the criteria on the new one are checked. */
+    /**
+     * Phase 1 on create: there is no existing resource, so only the new one is checked — and only when its
+     * references are resolved. An unresolved conditional or {@code urn:uuid} reference is judged at
+     * {@code PRECOMMIT} instead; see {@link #beforeUpdate}.
+     */
     @Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_CREATED)
     public void beforeCreate(IBaseResource created, RequestDetails request) {
-        requireInsideCriteria(request, created, Interaction.CREATE);
+        if (fullyResolved(created, request)) {
+            requireInsideCriteria(request, created, Interaction.CREATE);
+        }
     }
 
     /**
-     * Phase 1 on update: <b>both</b> states must be inside criteria, and {@code readonlyFields} are restored
-     * from the old one. Checking the old state is what stops a caller editing a resource they cannot reach;
-     * checking the new state here as well stops them moving one outside their own criteria.
+     * Phase 1 on update: the <b>existing</b> resource must be inside criteria, and {@code readonlyFields} are
+     * restored from it. Checking the old state is what stops a caller editing a resource they cannot reach.
+     *
+     * <p>The new state is checked here <i>only when it is fully resolved</i>, and at {@code PRECOMMIT}
+     * otherwise. Judging an unresolved state is not a stricter check, it is a wrong one: a conditional
+     * reference still reading {@code Patient?identifier=…} fails every criterion, including the ones it would
+     * satisfy once resolved, so a caller writing a legitimate transaction gets a 403. Phase 2 exists precisely
+     * because this pointcut cannot see the final state.
      */
     @Hook(Pointcut.STORAGE_PRESTORAGE_RESOURCE_UPDATED)
     public void beforeUpdate(IBaseResource existing, IBaseResource updated, RequestDetails request) {
@@ -65,7 +76,9 @@ public class PolicyWriteInterceptor {
             return;
         }
         requireInsideCriteria(request, existing, Interaction.UPDATE);
-        requireInsideCriteria(request, updated, Interaction.UPDATE);
+        if (fullyResolved(updated, request)) {
+            requireInsideCriteria(request, updated, Interaction.UPDATE);
+        }
         restoreReadonlyFields(request, policy, existing, updated);
     }
 
@@ -139,6 +152,26 @@ public class PolicyWriteInterceptor {
             throw new ForbiddenOperationException(
                     "This " + type + " is outside the criteria of the caller's access policy");
         }
+    }
+
+    /**
+     * Whether every reference on the resource is a literal {@code Type/id} that a criterion can be evaluated
+     * against. A conditional ({@code Patient?identifier=…}) or placeholder ({@code urn:uuid:…}) reference is
+     * not resolved until {@code PRECOMMIT}, and the check is deferred to there rather than run against a value
+     * that cannot match.
+     *
+     * <p>Deferring is not a hole: {@code PRECOMMIT} is unconditional, so every write is checked in its final
+     * state exactly once. What would be a hole is to skip the resolved case here too — phase 1 is what catches
+     * an ordinary REST update before it is written.
+     */
+    private boolean fullyResolved(IBaseResource resource, RequestDetails request) {
+        for (var reference : request.getFhirContext().newTerser().getAllResourceReferences(resource)) {
+            String value = reference.getResourceReference().getReferenceElement().getValue();
+            if (value != null && (value.contains("?") || value.startsWith("urn:"))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Null means no enforcement here: a system request, a super-admin, or no caller at all. */
