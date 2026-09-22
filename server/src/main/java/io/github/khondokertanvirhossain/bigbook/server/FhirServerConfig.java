@@ -30,6 +30,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.khondokertanvirhossain.bigbook.core.policy.CriteriaValidator;
 import io.github.khondokertanvirhossain.bigbook.core.policy.PolicyCompiler;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyProvider;
 import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyStore;
 import io.github.khondokertanvirhossain.bigbook.server.policy.CriteriaEvaluator;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyBinder;
@@ -174,13 +175,18 @@ public class FhirServerConfig {
             TenantStore tenantStore,
             PartitionSettings partitionSettings,
             InMemoryResourceMatcher inMemoryResourceMatcher,
-            PolicyBinder policyBinder) {
+            PolicyBinder policyBinder,
+            AccessPolicyProvider accessPolicyProvider) {
         RestfulServer server = new RestfulServer(systemDao.getContext());
         daoRegistry.setSupportedResourceTypes(systemDao.getContext().getResourceTypes());
         server.registerProviders(resourceProviders.createProviders());
         server.registerProvider(systemProvider);
         // terminology operations on ValueSet; $lookup and $validate-code come with the generated providers
         server.registerProvider(valueSetOperationProvider);
+        // AccessPolicy is served from Big Book's own table, not HAPI JPA: the @ResourceDef spike on #7
+        // measured that JPA has no DAO for a runtime-registered type (HAPI-0572), and the failure is
+        // structural. ADR-003's other Medplum admin types will follow this same pattern in v0.2.
+        server.registerProvider(accessPolicyProvider);
         server.setServerConformanceProvider(new JpaCapabilityStatementProvider(
                 server, systemDao, storageSettings, searchParamRegistry, validationSupport));
         server.setPagingProvider(pagingProvider);
@@ -216,6 +222,12 @@ public class FhirServerConfig {
     @Bean
     public AccessPolicyStore accessPolicyStore(JdbcClient jdbcClient, ObjectMapper objectMapper) {
         return new AccessPolicyStore(jdbcClient, objectMapper);
+    }
+
+    @Bean
+    public AccessPolicyProvider accessPolicyProvider(AccessPolicyStore store, CriteriaValidator criteriaValidator,
+            ObjectMapper objectMapper, FhirContext fhirContext) {
+        return new AccessPolicyProvider(store, criteriaValidator, objectMapper, fhirContext);
     }
 
     @Bean

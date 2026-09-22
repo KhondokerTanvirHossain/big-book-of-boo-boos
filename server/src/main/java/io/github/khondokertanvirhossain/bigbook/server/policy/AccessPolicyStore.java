@@ -56,7 +56,7 @@ public class AccessPolicyStore {
 
     private PolicyCompiler.PolicyDocument loadOne(UUID projectId, UUID id, String reference) {
         // project_id in the WHERE clause is the tenancy boundary, not an optimisation
-        return jdbc.sql("SELECT document FROM access_policy WHERE project_id = ? AND id = ?")
+        return jdbc.sql("SELECT document FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
                 .params(projectId, id)
                 .query(String.class)
                 .optional()
@@ -88,6 +88,36 @@ public class AccessPolicyStore {
             log.warn("access policy {} is not readable; it grants nothing", reference, unreadable);
             return empty(reference);
         }
+    }
+
+    /** Stores a new policy in this project. The id is server-assigned, as for every other Big Book resource. */
+    public void save(UUID projectId, UUID id, String name, String document) {
+        jdbc.sql("INSERT INTO bigbook.access_policy (id, project_id, name, document, version_id) VALUES (?, ?, ?, ?::jsonb, '1')")
+                .params(id, projectId, name, document)
+                .update();
+    }
+
+    /**
+     * Replaces a policy <b>within one project</b>. The project_id in the WHERE clause is what makes a
+     * cross-project update impossible rather than merely unlikely.
+     *
+     * @return false when this project has no such policy, which the provider turns into a 404 — never a 403,
+     *     because a 403 would confirm that the policy exists in some other project
+     */
+    public boolean replace(UUID projectId, UUID id, String name, String document) {
+        return jdbc.sql("UPDATE bigbook.access_policy SET name = ?, document = ?::jsonb,"
+                        + " version_id = (version_id::int + 1)::text, last_updated = now()"
+                        + " WHERE project_id = ? AND id = ?")
+                .params(name, document, projectId, id)
+                .update() > 0;
+    }
+
+    /** Reads one policy's stored document, scoped to the project. */
+    public java.util.Optional<String> read(UUID projectId, UUID id) {
+        return jdbc.sql("SELECT document FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
+                .params(projectId, id)
+                .query(String.class)
+                .optional();
     }
 
     /** A policy that grants nothing: present in the list, so the caller's other attachments still apply. */

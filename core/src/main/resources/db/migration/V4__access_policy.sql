@@ -1,6 +1,8 @@
 -- Issue #7: AccessPolicy storage. Not a HAPI JPA resource — served by a plain IResourceProvider from this
 -- table, as ADR-001 and ADR-003 decide for the Medplum admin types. HAPI JPA has no DAO for a custom
 -- @ResourceDef type on 8.12.1 (HAPI-0572, spiked on #7), so a table is the only honest option.
+-- Flyway's default schema is `bigbook`, so unqualified names here land there; runtime SQL qualifies them
+-- explicitly because the JDBC connection's currentSchema is `hapi`.
 
 CREATE TABLE access_policy (
     id          uuid PRIMARY KEY,
