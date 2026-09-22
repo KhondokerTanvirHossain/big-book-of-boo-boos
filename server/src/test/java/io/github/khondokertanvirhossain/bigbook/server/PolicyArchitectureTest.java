@@ -137,8 +137,20 @@ class PolicyArchitectureTest {
                 }
             }
         }
+        // The standard, so a third handler is argued against something rather than pointed at a precedent:
+        // a RuntimeException handler belongs here only if EVERY path out of it narrows access. Both of these
+        // convert a failure into a refusal and have no path that returns a permission:
+        //
+        //   CriteriaValidator.requireWritable   — FhirContext rejects the resource type; the only exit is
+        //                                         throwing CriteriaRejectedException, so the policy will not save.
+        //   PolicyCompiler.compileCriteria      — HAPI cannot parse the match URL; the only exit is
+        //                                         Criteria.Never, which grants nothing.
+        //
+        // If a proposed handler has any exit that returns Always, a permitted interaction, an empty
+        // hiddenFields list, or simply continues past the failure, it is not a fail-closed boundary and the
+        // exception must be caught specifically instead. Add to this list only with that argument in the PR.
         org.assertj.core.api.Assertions.assertThat(failClosed)
-                .as("every RuntimeException handler in the policy path must be a known fail-closed boundary")
+                .as("every RuntimeException handler in the policy path must be a fail-closed boundary: see the comment above")
                 .containsOnly("CriteriaValidator.requireWritable", "PolicyCompiler.compileCriteria");
     }
 
