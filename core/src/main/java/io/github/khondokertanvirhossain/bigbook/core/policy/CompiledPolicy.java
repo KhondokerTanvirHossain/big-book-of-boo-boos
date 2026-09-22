@@ -47,8 +47,19 @@ public record CompiledPolicy(boolean bypass, List<Entry> entries, List<String> p
             readonlyFields = readonlyFields == null ? List.of() : List.copyOf(readonlyFields);
         }
 
+        /**
+         * T1: {@code *} covers every type <b>except</b> the project-admin types. A policy saying "everything"
+         * must not hand out {@code Project} or {@code User}; those come only from an entry naming them, which
+         * is what {@code AdminTypeRules.forAdminMembership()} injects for an admin membership.
+         *
+         * <p>This lives on the record rather than in the compiler because it is an invariant: a caller that
+         * builds a {@code CompiledPolicy} by hand must not be able to route around it.
+         */
         public boolean covers(String type) {
-            return "*".equals(resourceType) || resourceType.equals(type);
+            if (resourceType.equals(type)) {
+                return true;
+            }
+            return "*".equals(resourceType) && !AdminTypeRules.isProjectAdminType(type);
         }
 
         public boolean permits(Interaction interaction) {
