@@ -75,10 +75,10 @@ class CompiledPolicyTest {
 
     @Test
     void theThreeNamedStartingPoints() {
-        assertThat(CompiledPolicy.superAdmin().criteriaFor("Anything", Interaction.DELETE).allowsEverything()).isTrue();
-        assertThat(CompiledPolicy.superAdmin().hiddenFieldsFor("Patient")).isEmpty();
-        assertThat(CompiledPolicy.fullProjectAccess().criteriaFor("Patient", Interaction.CREATE).allowsEverything()).isTrue();
-        assertThat(CompiledPolicy.denyAll("unreadable policy").criteriaFor("Patient", Interaction.READ).deniesEverything()).isTrue();
+        assertThat(PolicyDefaults.superAdmin().criteriaFor("Anything", Interaction.DELETE).allowsEverything()).isTrue();
+        assertThat(PolicyDefaults.superAdmin().hiddenFieldsFor("Patient")).isEmpty();
+        assertThat(PolicyDefaults.fullProjectAccess().criteriaFor("Patient", Interaction.CREATE).allowsEverything()).isTrue();
+        assertThat(PolicyDefaults.denyAll("unreadable policy").criteriaFor("Patient", Interaction.READ).deniesEverything()).isTrue();
     }
 
     @Test

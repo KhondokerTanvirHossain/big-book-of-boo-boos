@@ -61,25 +61,6 @@ public record CompiledPolicy(boolean bypass, List<Entry> entries, List<String> p
         policyIds = policyIds == null ? List.of() : List.copyOf(policyIds);
     }
 
-    /** A super-admin: {@code allowAll}, and nothing else in this record is consulted (T1). */
-    public static CompiledPolicy superAdmin() {
-        return new CompiledPolicy(true, List.of(), List.of());
-    }
-
-    /** A membership with no policy at all compiles to full project access (T1, BB-R-006.2). */
-    public static CompiledPolicy fullProjectAccess() {
-        return new CompiledPolicy(false,
-                List.of(new Entry("*", new Criteria.Always(), Set.of(Interaction.values()), List.of(), List.of(), null)),
-                List.of());
-    }
-
-    /** Nothing is permitted. What an unreadable or wholly refused policy set becomes — fails closed (D14). */
-    public static CompiledPolicy denyAll(String because) {
-        return new CompiledPolicy(false,
-                List.of(new Entry("*", new Criteria.Never(because), Set.of(), List.of(), List.of(), null)),
-                List.of());
-    }
-
     /** The entries that could apply to a type and interaction; empty means the request is denied. */
     public List<Entry> applicable(String resourceType, Interaction interaction) {
         return entries.stream()
