@@ -24,6 +24,19 @@ import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
 import ca.uhn.fhir.jpa.util.ResourceCountCache;
 import ca.uhn.fhir.rest.api.IResourceSupportedSvc;
 import ca.uhn.fhir.rest.server.HardcodedServerAddressStrategy;
+import ca.uhn.fhir.jpa.searchparam.MatchUrlService;
+import ca.uhn.fhir.jpa.searchparam.matcher.InMemoryResourceMatcher;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.khondokertanvirhossain.bigbook.core.policy.CriteriaValidator;
+import io.github.khondokertanvirhossain.bigbook.core.policy.PolicyCompiler;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyStore;
+import io.github.khondokertanvirhossain.bigbook.server.policy.CriteriaEvaluator;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyBinder;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyAuthorizationInterceptor;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyDenialLog;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyEnforcementInterceptor;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyWriteInterceptor;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.provider.ResourceProviderFactory;
 import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
@@ -159,7 +172,9 @@ public class FhirServerConfig {
             DatabaseBackedPagingProvider pagingProvider,
             ValueSetOperationProvider valueSetOperationProvider,
             TenantStore tenantStore,
-            PartitionSettings partitionSettings) {
+            PartitionSettings partitionSettings,
+            InMemoryResourceMatcher inMemoryResourceMatcher,
+            PolicyBinder policyBinder) {
         RestfulServer server = new RestfulServer(systemDao.getContext());
         daoRegistry.setSupportedResourceTypes(systemDao.getContext().getResourceTypes());
         server.registerProviders(resourceProviders.createProviders());
@@ -171,8 +186,41 @@ public class FhirServerConfig {
         server.setPagingProvider(pagingProvider);
         server.registerInterceptor(new PartitionInterceptor(tenantStore, partitionSettings));
         server.registerInterceptor(new InterimOperationDenyInterceptor());
+        // The policy layer (ADR-001), registered in the order it must run: the coarse type × interaction
+        // rules first, so an entirely unpermitted interaction is a 403 before any resource is fetched; then
+        // the criteria hooks, which narrow, drop and hide what the coarse layer let through; then the write
+        // check. Partition scoping stays ahead of all of it — a policy is only ever asked about resources
+        // that are already confined to the caller's project.
+        PolicyDenialLog denialLog = new PolicyDenialLog();
+        CriteriaEvaluator criteriaEvaluator = new CriteriaEvaluator(inMemoryResourceMatcher);
+        // the binder first: every hook below reads the policy it resolves, and a request that reaches them
+        // without one is refused rather than allowed
+        server.registerInterceptor(policyBinder);
+        server.registerInterceptor(new PolicyAuthorizationInterceptor(denialLog));
+        server.registerInterceptor(new PolicyEnforcementInterceptor(criteriaEvaluator, denialLog));
+        server.registerInterceptor(new PolicyWriteInterceptor(criteriaEvaluator, denialLog));
         server.setServerAddressStrategy(new HardcodedServerAddressStrategy(properties.fhirBaseUrl()));
         return server;
+    }
+
+    @Bean
+    public CriteriaValidator criteriaValidator(FhirContext fhirContext, InMemoryResourceMatcher matcher) {
+        return new CriteriaValidator(fhirContext, matcher);
+    }
+
+    @Bean
+    public PolicyCompiler policyCompiler(CriteriaValidator criteriaValidator, MatchUrlService matchUrlService) {
+        return new PolicyCompiler(criteriaValidator, matchUrlService);
+    }
+
+    @Bean
+    public AccessPolicyStore accessPolicyStore(JdbcClient jdbcClient, ObjectMapper objectMapper) {
+        return new AccessPolicyStore(jdbcClient, objectMapper);
+    }
+
+    @Bean
+    public PolicyBinder policyBinder(PolicyCompiler policyCompiler, AccessPolicyStore accessPolicyStore, ObjectMapper objectMapper) {
+        return new PolicyBinder(policyCompiler, accessPolicyStore, objectMapper);
     }
 
     @Bean

@@ -4,8 +4,6 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
-import ca.uhn.fhir.jpa.searchparam.matcher.InMemoryMatchResult;
-import ca.uhn.fhir.jpa.searchparam.matcher.InMemoryResourceMatcher;
 import ca.uhn.fhir.rest.api.RestOperationTypeEnum;
 import ca.uhn.fhir.rest.api.server.IPreResourceAccessDetails;
 import ca.uhn.fhir.rest.api.server.IPreResourceShowDetails;
@@ -34,11 +32,11 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 @Interceptor
 public class PolicyEnforcementInterceptor {
 
-    private final InMemoryResourceMatcher matcher;
+    private final CriteriaEvaluator evaluator;
     private final PolicyDenialLog denialLog;
 
-    public PolicyEnforcementInterceptor(InMemoryResourceMatcher matcher, PolicyDenialLog denialLog) {
-        this.matcher = matcher;
+    public PolicyEnforcementInterceptor(CriteriaEvaluator evaluator, PolicyDenialLog denialLog) {
+        this.evaluator = evaluator;
         this.denialLog = denialLog;
     }
 
@@ -134,18 +132,8 @@ public class PolicyEnforcementInterceptor {
         }
     }
 
-    /** Whether {@code Criteria} holds for one resource, asked of HAPI's matcher rather than reimplemented. */
     private boolean satisfies(Criteria criteria, IBaseResource resource) {
-        return switch (criteria) {
-            case Criteria.Always ignored -> true;
-            case Criteria.Never ignored -> false;
-            case Criteria.Match match -> {
-                InMemoryMatchResult result = matcher.match(match.source(), resource, null, null);
-                // an unsupported criterion at request time denies: fails closed (D14)
-                yield result.supported() && result.matched();
-            }
-            case Criteria.AnyOf anyOf -> anyOf.alternatives().stream().anyMatch(each -> satisfies(each, resource));
-        };
+        return criteria.allowsEverything() || evaluator.satisfies(criteria, resource);
     }
 
     /** The tenant context the partition interceptor resolved, for the denial log; null on an internal call. */

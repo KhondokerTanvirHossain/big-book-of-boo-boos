@@ -18,7 +18,11 @@ public final class PolicyTestAccess {
     }
 
     public static PolicyEnforcementInterceptor enforcement(InMemoryResourceMatcher matcher, PolicyDenialLog log) {
-        return new PolicyEnforcementInterceptor(matcher, log);
+        return new PolicyEnforcementInterceptor(new CriteriaEvaluator(matcher), log);
+    }
+
+    public static PolicyWriteInterceptor writes(InMemoryResourceMatcher matcher, PolicyDenialLog log) {
+        return new PolicyWriteInterceptor(new CriteriaEvaluator(matcher), log);
     }
 
     public static RequestDetails withPolicy(RequestDetails request, CompiledPolicy policy) {
