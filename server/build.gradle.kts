@@ -25,6 +25,8 @@ dependencies {
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // the seam in #7's description, asserted rather than assumed
+    testImplementation("com.tngtech.archunit:archunit-junit5:${versions.getProperty("ARCHUNIT_VERSION")}")
     // Testcontainers 2.x names: HAPI's BOM pins the 2.x line, and mixing it with Boot's 1.x modules does not link
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
