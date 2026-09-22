@@ -34,37 +34,60 @@ public class AccessPolicyStore {
     }
 
     /**
+     * The documents a membership's references resolve to, <b>with the version of each</b>.
+     *
+     * <p>The versions come back from the same query as the documents, not a second one: a version read
+     * separately could describe a different revision than the document beside it, and the cache would then key
+     * a policy under the wrong fingerprint — serving a revoked policy.
+     *
      * @param references {@code AccessPolicy/<id>} references, in attachment order — order matters because
      *     the compiler concatenates entries and the first match for a type wins
-     * @return one document per reference that resolved; a reference naming a policy this project does not have
-     *     yields {@link PolicyCompiler#document} with no resources, which grants nothing
      */
-    public List<PolicyCompiler.PolicyDocument> load(UUID projectId, List<String> references) {
+    public Loaded load(UUID projectId, List<String> references) {
         List<PolicyCompiler.PolicyDocument> documents = new ArrayList<>();
+        List<String> versions = new ArrayList<>();
         for (String reference : references) {
             UUID id = idOf(reference);
             if (id == null) {
                 // a reference that is not AccessPolicy/<uuid> cannot be resolved, so it grants nothing
                 log.warn("access policy reference {} is not an AccessPolicy id; it grants nothing", reference);
                 documents.add(empty(reference));
+                versions.add(MISSING);
                 continue;
             }
-            documents.add(loadOne(projectId, id, reference));
+            loadOne(projectId, id, reference, documents, versions);
         }
-        return documents;
+        return new Loaded(documents, versions);
     }
 
-    private PolicyCompiler.PolicyDocument loadOne(UUID projectId, UUID id, String reference) {
+    /**
+     * What a membership's policy references resolved to. The two lists are positionally aligned with the
+     * references that produced them.
+     *
+     * @param documents one per reference — an unresolved one grants nothing rather than being skipped
+     * @param versions the {@code version_id} of each, for {@link CompiledPolicyCache}'s fingerprint
+     */
+    public record Loaded(List<PolicyCompiler.PolicyDocument> documents, List<String> versions) {
+    }
+
+    /** The version recorded for a reference that resolved to nothing — distinct from any real version_id. */
+    private static final String MISSING = "-";
+
+    private void loadOne(UUID projectId, UUID id, String reference,
+            List<PolicyCompiler.PolicyDocument> documents, List<String> versions) {
         // project_id in the WHERE clause is the tenancy boundary, not an optimisation
-        return jdbc.sql("SELECT document FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
+        var row = jdbc.sql("SELECT document, version_id FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
                 .params(projectId, id)
-                .query(String.class)
-                .optional()
-                .map(document -> parse(reference, document))
-                .orElseGet(() -> {
-                    log.warn("access policy {} is not in project {}; it grants nothing", reference, projectId);
-                    return empty(reference);
-                });
+                .query((rs, n) -> new String[] {rs.getString("document"), rs.getString("version_id")})
+                .optional();
+        if (row.isEmpty()) {
+            log.warn("access policy {} is not in project {}; it grants nothing", reference, projectId);
+            documents.add(empty(reference));
+            versions.add(MISSING);
+            return;
+        }
+        documents.add(parse(reference, row.get()[0]));
+        versions.add(row.get()[1]);
     }
 
     @SuppressWarnings("unchecked")

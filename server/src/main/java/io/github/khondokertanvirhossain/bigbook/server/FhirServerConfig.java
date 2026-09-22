@@ -32,6 +32,7 @@ import io.github.khondokertanvirhossain.bigbook.core.policy.PolicyCompiler;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyProvider;
 import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyStore;
+import io.github.khondokertanvirhossain.bigbook.server.policy.CompiledPolicyCache;
 import io.github.khondokertanvirhossain.bigbook.server.policy.CriteriaEvaluator;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyBinder;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyAuthorizationInterceptor;
@@ -231,8 +232,14 @@ public class FhirServerConfig {
     }
 
     @Bean
-    public PolicyBinder policyBinder(PolicyCompiler policyCompiler, AccessPolicyStore accessPolicyStore, ObjectMapper objectMapper) {
-        return new PolicyBinder(policyCompiler, accessPolicyStore, objectMapper);
+    public CompiledPolicyCache compiledPolicyCache() {
+        return new CompiledPolicyCache();
+    }
+
+    @Bean
+    public PolicyBinder policyBinder(PolicyCompiler policyCompiler, AccessPolicyStore accessPolicyStore,
+            CompiledPolicyCache compiledPolicyCache, ObjectMapper objectMapper) {
+        return new PolicyBinder(policyCompiler, accessPolicyStore, compiledPolicyCache, objectMapper);
     }
 
     @Bean

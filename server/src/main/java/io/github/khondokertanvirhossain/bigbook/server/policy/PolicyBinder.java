@@ -43,11 +43,13 @@ public class PolicyBinder {
 
     private final PolicyCompiler compiler;
     private final AccessPolicyStore policies;
+    private final CompiledPolicyCache cache;
     private final ObjectMapper json;
 
-    public PolicyBinder(PolicyCompiler compiler, AccessPolicyStore policies, ObjectMapper json) {
+    public PolicyBinder(PolicyCompiler compiler, AccessPolicyStore policies, CompiledPolicyCache cache, ObjectMapper json) {
         this.compiler = compiler;
         this.policies = policies;
+        this.cache = cache;
         this.json = json;
     }
 
@@ -105,9 +107,12 @@ public class PolicyBinder {
                 }
             }
         }
-        List<PolicyCompiler.PolicyDocument> documents = policies.load(membership.projectId(), references);
+        AccessPolicyStore.Loaded loaded = policies.load(membership.projectId(), references);
         PolicyParameters substitutions = PolicyParameters.forMembership(membership.profile(), parameters);
-        return compiler.compile(documents, substitutions, membership.admin());
+        // the documents are loaded on every request, but compiling them is the expensive part; the cache keys
+        // on the policy versions just read, so an edited policy recompiles rather than being served stale
+        return cache.get(membership, loaded.versions(),
+                () -> compiler.compile(loaded.documents(), substitutions, membership.admin()));
     }
 
     /** {@code access} is stored as the JSON array Medplum sends; absent or malformed means no entries. */
