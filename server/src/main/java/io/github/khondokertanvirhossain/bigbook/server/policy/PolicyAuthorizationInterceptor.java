@@ -66,6 +66,11 @@ public class PolicyAuthorizationInterceptor extends AuthorizationInterceptor {
         // ObservationList → only visible entries, no 403"). Every resource a GraphQL query reaches still passes
         // through the criteria drop, so allowing the operation does not widen what a caller can see.
         rules = rules.allow("graphql, filtered per resource at PREACCESS").graphQL().any().andThen();
+        // a transaction/batch bundle POSTs to the server root, which no type rule covers. andApplyNormalRules
+        // is the reason this does not widen anything: HAPI re-applies the rules above to every entry in the
+        // bundle, and each entry also goes through the write check at PRESTORAGE/PRECOMMIT. Refusing the bundle
+        // here would make transactions unusable for every caller who is not a super-admin.
+        rules = rules.allow("transaction, entries checked individually").transaction().withAnyOperation().andApplyNormalRules().andThen();
         return rules.denyAll("outside policy").build();
     }
 
@@ -90,7 +95,10 @@ public class PolicyAuthorizationInterceptor extends AuthorizationInterceptor {
             rules = appliedTo(rules.allow(because + " update").write(), type);
         }
         if (permitted.contains(Interaction.DELETE)) {
-            rules = rules.allow(because + " delete").delete().resourcesOfType(type).withAnyId().andThen();
+            // through appliedTo like every other verb: calling resourcesOfType("*") directly makes HAPI treat
+            // the wildcard as a resource type literally named "*", which matches nothing and silently refuses
+            // every delete a "*" policy should permit
+            rules = appliedTo(rules.allow(because + " delete").delete(), type);
         }
         return rules;
     }

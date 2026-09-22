@@ -52,6 +52,12 @@ public class PolicyEnforcementInterceptor {
             return;
         }
         String resourceType = request.getResourceName();
+        if (resourceType == null) {
+            // HAPI runs internal searches with no resource name on the request — resolving a conditional
+            // reference inside a transaction is one. There is nothing to narrow to, and the resources such a
+            // search returns still pass through the PREACCESS drop, which knows each one's actual type.
+            return;
+        }
         Criteria criteria = policy.criteriaFor(resourceType, Interaction.SEARCH);
         if (criteria.allowsEverything()) {
             return;

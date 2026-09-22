@@ -25,7 +25,10 @@ public final class AdminTypeRules {
     }
 
     public static boolean isProjectAdminType(String resourceType) {
-        return PROJECT_ADMIN_TYPES.contains(resourceType);
+        // Set.of throws on contains(null), and a null type reaches here from HAPI's internal searches (a
+        // conditional reference in a transaction has no resource name on the request). Treating null as "an
+        // admin type" is the fail-closed answer: a wildcard entry then does not cover it.
+        return resourceType == null || PROJECT_ADMIN_TYPES.contains(resourceType);
     }
 
     /**
