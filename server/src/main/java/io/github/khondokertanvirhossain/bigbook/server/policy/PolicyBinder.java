@@ -41,16 +41,10 @@ public class PolicyBinder {
 
     private static final Logger log = LoggerFactory.getLogger(PolicyBinder.class);
 
-    private final PolicyCompiler compiler;
-    private final AccessPolicyStore policies;
-    private final CompiledPolicyCache cache;
-    private final ObjectMapper json;
+    private final PolicyResolver resolver;
 
-    public PolicyBinder(PolicyCompiler compiler, AccessPolicyStore policies, CompiledPolicyCache cache, ObjectMapper json) {
-        this.compiler = compiler;
-        this.policies = policies;
-        this.cache = cache;
-        this.json = json;
+    public PolicyBinder(PolicyResolver resolver) {
+        this.resolver = resolver;
     }
 
     @Hook(Pointcut.SERVER_INCOMING_REQUEST_PRE_HANDLED)
@@ -71,79 +65,7 @@ public class PolicyBinder {
         if (caller.superAdmin()) {
             return PolicyDefaults.superAdmin();
         }
-        Membership membership = caller.membership();
-        if (membership == null || !membership.active()) {
-            return PolicyDefaults.denyAll("no active membership");
-        }
-        try {
-            return compile(membership);
-        } catch (RuntimeException unreadable) {
-            // fail closed (D14). The only exit from this handler is denyAll — see the fail-closed standard
-            // pinned in PolicyArchitectureTest rule 4 before adding another handler like this.
-            log.warn("policy for membership {} could not be compiled; denying all access", membership.id(), unreadable);
-            return PolicyDefaults.denyAll("policy could not be compiled");
-        }
+        return resolver.compile(caller.membership());
     }
 
-    /**
-     * {@code ProjectMembership.accessPolicy} and each {@code access[].policy} are references to
-     * {@code AccessPolicy} resources; {@code access[].parameter[]} supplies that attachment's substitutions.
-     * They concatenate, and their criteria OR (T3).
-     */
-    private CompiledPolicy compile(Membership membership) throws RuntimeException {
-        List<String> references = new ArrayList<>();
-        Map<String, String> parameters = new LinkedHashMap<>();
-        if (membership.accessPolicy() != null && !membership.accessPolicy().isBlank()) {
-            reference(membership.accessPolicy()).ifPresent(references::add);
-        }
-        for (JsonNode entry : readAccess(membership.access())) {
-            JsonNode policy = entry.path("policy");
-            reference(policy.isTextual() ? policy.asText() : policy.toString()).ifPresent(references::add);
-            for (JsonNode parameter : entry.path("parameter")) {
-                String name = parameter.path("name").asText(null);
-                String value = parameter.path("valueReference").path("reference").asText(null);
-                if (name != null && value != null) {
-                    parameters.put(name, value);
-                }
-            }
-        }
-        AccessPolicyStore.Loaded loaded = policies.load(membership.projectId(), references);
-        PolicyParameters substitutions = PolicyParameters.forMembership(membership.profile(), parameters);
-        // the documents are loaded on every request, but compiling them is the expensive part; the cache keys
-        // on the policy versions just read, so an edited policy recompiles rather than being served stale
-        return cache.get(membership, loaded.versions(),
-                () -> compiler.compile(loaded.documents(), substitutions, membership.admin()));
-    }
-
-    /** {@code access} is stored as the JSON array Medplum sends; absent or malformed means no entries. */
-    private Iterable<JsonNode> readAccess(String access) {
-        if (access == null || access.isBlank()) {
-            return List.of();
-        }
-        try {
-            JsonNode parsed = json.readTree(access);
-            return parsed.isArray() ? parsed : List.of();
-        } catch (com.fasterxml.jackson.core.JacksonException malformed) {
-            // not readable, so not grantable: the caller gets whatever their other attachments allow, and the
-            // malformed one contributes nothing rather than being guessed at
-            log.warn("membership access[] is not valid JSON; ignoring it", malformed);
-            return List.of();
-        }
-    }
-
-    /** A {@code Reference} may arrive as {@code {"reference":"AccessPolicy/x"}} or as the bare string. */
-    private java.util.Optional<String> reference(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return java.util.Optional.empty();
-        }
-        String text = raw.trim();
-        if (text.startsWith("{")) {
-            try {
-                text = json.readTree(text).path("reference").asText("");
-            } catch (com.fasterxml.jackson.core.JacksonException notJson) {
-                return java.util.Optional.empty();
-            }
-        }
-        return text.isBlank() ? java.util.Optional.empty() : java.util.Optional.of(text);
-    }
 }

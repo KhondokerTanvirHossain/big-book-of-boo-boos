@@ -145,8 +145,10 @@ class PolicyArchitectureTest {
         //                                         throwing CriteriaRejectedException, so the policy will not save.
         //   PolicyCompiler.compileCriteria      — HAPI cannot parse the match URL; the only exit is
         //                                         Criteria.Never, which grants nothing.
-        //   PolicyBinder.resolve                — a policy document will not compile; the only exit is
+        //   PolicyResolver.compile              — a policy document will not compile; the only exit is
         //                                         PolicyDefaults.denyAll, so the caller gets nothing at all.
+        //                                         (Was PolicyBinder.resolve until the resolver was extracted
+        //                                         for subscription delivery; same handler, same argument.)
         //
         // If a proposed handler has any exit that returns Always, a permitted interaction, an empty
         // hiddenFields list, or simply continues past the failure, it is not a fail-closed boundary and the
@@ -154,7 +156,7 @@ class PolicyArchitectureTest {
         org.assertj.core.api.Assertions.assertThat(failClosed)
                 .as("every RuntimeException handler in the policy path must be a fail-closed boundary: see the comment above")
                 .containsOnly("CriteriaValidator.requireWritable", "PolicyCompiler.compileCriteria",
-                        "PolicyBinder.resolve");
+                        "PolicyResolver.compile");
     }
 
 }

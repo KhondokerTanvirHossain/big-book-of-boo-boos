@@ -37,6 +37,9 @@ import io.github.khondokertanvirhossain.bigbook.server.policy.CriteriaEvaluator;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyBinder;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyAuthorizationInterceptor;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyDenialLog;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyResolver;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicySubscriptionInterceptor;
+import io.github.khondokertanvirhossain.bigbook.server.policy.SubscriptionAuthorPolicy;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyEnforcementInterceptor;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyWriteInterceptor;
 import ca.uhn.fhir.rest.server.RestfulServer;
@@ -175,9 +178,11 @@ public class FhirServerConfig {
             ValueSetOperationProvider valueSetOperationProvider,
             TenantStore tenantStore,
             PartitionSettings partitionSettings,
-            InMemoryResourceMatcher inMemoryResourceMatcher,
+            CriteriaEvaluator criteriaEvaluator,
+            PolicyDenialLog policyDenialLog,
             PolicyBinder policyBinder,
-            AccessPolicyProvider accessPolicyProvider) {
+            AccessPolicyProvider accessPolicyProvider,
+            SubscriptionAuthorPolicy subscriptionAuthorPolicy) {
         RestfulServer server = new RestfulServer(systemDao.getContext());
         daoRegistry.setSupportedResourceTypes(systemDao.getContext().getResourceTypes());
         server.registerProviders(resourceProviders.createProviders());
@@ -198,14 +203,18 @@ public class FhirServerConfig {
         // the criteria hooks, which narrow, drop and hide what the coarse layer let through; then the write
         // check. Partition scoping stays ahead of all of it — a policy is only ever asked about resources
         // that are already confined to the caller's project.
-        PolicyDenialLog denialLog = new PolicyDenialLog();
-        CriteriaEvaluator criteriaEvaluator = new CriteriaEvaluator(inMemoryResourceMatcher);
+        PolicyDenialLog denialLog = policyDenialLog;
         // the binder first: every hook below reads the policy it resolves, and a request that reaches them
         // without one is refused rather than allowed
         server.registerInterceptor(policyBinder);
         server.registerInterceptor(new PolicyAuthorizationInterceptor(denialLog));
         server.registerInterceptor(new PolicyEnforcementInterceptor(criteriaEvaluator, denialLog));
         server.registerInterceptor(new PolicyWriteInterceptor(criteriaEvaluator, denialLog));
+        // subscription delivery leaves the server without passing the REST hooks above, so the author's policy
+        // is applied on its own two pointcuts. Inert until #12 records subscription authorship — see
+        // SubscriptionAuthorPolicy, which fails closed rather than guessing an author.
+        server.registerInterceptor(new PolicySubscriptionInterceptor(
+                subscriptionAuthorPolicy, criteriaEvaluator, systemDao.getContext(), denialLog));
         server.setServerAddressStrategy(new HardcodedServerAddressStrategy(properties.fhirBaseUrl()));
         return server;
     }
@@ -232,14 +241,35 @@ public class FhirServerConfig {
     }
 
     @Bean
+    public CriteriaEvaluator criteriaEvaluator(InMemoryResourceMatcher inMemoryResourceMatcher) {
+        return new CriteriaEvaluator(inMemoryResourceMatcher);
+    }
+
+    @Bean
+    public PolicyDenialLog policyDenialLog() {
+        return new PolicyDenialLog();
+    }
+
+    @Bean
     public CompiledPolicyCache compiledPolicyCache() {
         return new CompiledPolicyCache();
     }
 
     @Bean
-    public PolicyBinder policyBinder(PolicyCompiler policyCompiler, AccessPolicyStore accessPolicyStore,
+    public PolicyResolver policyResolver(PolicyCompiler policyCompiler, AccessPolicyStore accessPolicyStore,
             CompiledPolicyCache compiledPolicyCache, ObjectMapper objectMapper) {
-        return new PolicyBinder(policyCompiler, accessPolicyStore, compiledPolicyCache, objectMapper);
+        return new PolicyResolver(policyCompiler, accessPolicyStore, compiledPolicyCache, objectMapper);
+    }
+
+    @Bean
+    public PolicyBinder policyBinder(PolicyResolver policyResolver) {
+        return new PolicyBinder(policyResolver);
+    }
+
+    @Bean
+    public SubscriptionAuthorPolicy subscriptionAuthorPolicy(TenantStore tenantStore, PolicyResolver policyResolver,
+            FhirContext fhirContext) {
+        return new SubscriptionAuthorPolicy(tenantStore, policyResolver, fhirContext);
     }
 
     @Bean
