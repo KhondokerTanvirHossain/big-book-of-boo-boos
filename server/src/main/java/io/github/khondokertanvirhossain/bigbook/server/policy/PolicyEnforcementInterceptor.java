@@ -32,6 +32,9 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 @Interceptor
 public class PolicyEnforcementInterceptor {
 
+    /** No resource can have this id, so a denied search returns empty rather than failing the request. */
+    private static final String IMPOSSIBLE_ID = "00000000-0000-0000-0000-000000000000";
+
     private final CriteriaEvaluator evaluator;
     private final PolicyDenialLog denialLog;
 
@@ -76,9 +79,6 @@ public class PolicyEnforcementInterceptor {
         // _filter, and ADR-001 says "ORed policies via _filter, else post-only". Post-only is correct and
         // safe; the paging consequence is documented in the ADR's paging rule.
     }
-
-    /** No resource can have this id, so a denied search returns empty rather than failing the request. */
-    private static final String IMPOSSIBLE_ID = "00000000-0000-0000-0000-000000000000";
 
     /**
      * The drop. Every resource on its way out, whatever brought it: a search entry, an {@code _include}, a

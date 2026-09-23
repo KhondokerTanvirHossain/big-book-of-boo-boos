@@ -75,11 +75,7 @@ public class AccessPolicyStore {
 
     private void loadOne(UUID projectId, UUID id, String reference,
             List<PolicyCompiler.PolicyDocument> documents, List<String> versions) {
-        // project_id in the WHERE clause is the tenancy boundary, not an optimisation
-        var row = jdbc.sql("SELECT document, version_id FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
-                .params(projectId, id)
-                .query((rs, n) -> new String[] {rs.getString("document"), rs.getString("version_id")})
-                .optional();
+        var row = documentAndVersion(projectId, id);
         if (row.isEmpty()) {
             log.warn("access policy {} is not in project {}; it grants nothing", reference, projectId);
             documents.add(empty(reference));
@@ -88,6 +84,14 @@ public class AccessPolicyStore {
         }
         documents.add(parse(reference, row.get()[0]));
         versions.add(row.get()[1]);
+    }
+
+    /** The one project-scoped read. {@code project_id} in the WHERE clause is the tenancy boundary. */
+    private java.util.Optional<String[]> documentAndVersion(UUID projectId, UUID id) {
+        return jdbc.sql("SELECT document, version_id FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
+                .params(projectId, id)
+                .query((rs, n) -> new String[] {rs.getString("document"), rs.getString("version_id")})
+                .optional();
     }
 
     @SuppressWarnings("unchecked")
@@ -137,10 +141,7 @@ public class AccessPolicyStore {
 
     /** Reads one policy's stored document, scoped to the project. */
     public java.util.Optional<String> read(UUID projectId, UUID id) {
-        return jdbc.sql("SELECT document FROM bigbook.access_policy WHERE project_id = ? AND id = ?")
-                .params(projectId, id)
-                .query(String.class)
-                .optional();
+        return documentAndVersion(projectId, id).map(row -> row[0]);
     }
 
     /** A policy that grants nothing: present in the list, so the caller's other attachments still apply. */
