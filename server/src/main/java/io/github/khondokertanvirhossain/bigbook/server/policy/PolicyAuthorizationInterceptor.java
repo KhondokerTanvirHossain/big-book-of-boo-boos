@@ -7,6 +7,7 @@ import ca.uhn.fhir.rest.server.interceptor.auth.IAuthRule;
 import ca.uhn.fhir.rest.server.interceptor.auth.IAuthRuleBuilder;
 import ca.uhn.fhir.rest.server.interceptor.auth.IAuthRuleBuilderRuleOp;
 import ca.uhn.fhir.rest.server.interceptor.auth.RuleBuilder;
+import io.github.khondokertanvirhossain.bigbook.core.policy.AdminTypeRules;
 import io.github.khondokertanvirhossain.bigbook.core.policy.CompiledPolicy;
 import io.github.khondokertanvirhossain.bigbook.core.policy.Interaction;
 import java.util.List;
@@ -54,6 +55,7 @@ public class PolicyAuthorizationInterceptor extends AuthorizationInterceptor {
         }
 
         IAuthRuleBuilder rules = new RuleBuilder();
+        rules = denyAdminTypesNotNamedOutright(rules, policy);
         for (CompiledPolicy.Entry entry : policy.entries()) {
             rules = appendRulesFor(rules, entry);
         }
@@ -99,6 +101,40 @@ public class PolicyAuthorizationInterceptor extends AuthorizationInterceptor {
             // the wildcard as a resource type literally named "*", which matches nothing and silently refuses
             // every delete a "*" policy should permit
             rules = appliedTo(rules.allow(because + " delete").delete(), type);
+        }
+        return rules;
+    }
+
+    /**
+     * T1 at this layer: a {@code *} entry must not reach the project-admin types.
+     *
+     * <p>{@link CompiledPolicy.Entry#covers} enforces this in the criteria hooks, but the rule list is built
+     * from {@code entries()} directly and a {@code *} entry becomes HAPI's {@code allResources()}, which
+     * includes every type. HAPI has no "all except these", so the admin types are denied explicitly and
+     * <b>first</b> — HAPI applies the first matching rule, so a deny ahead of the wildcard allow wins.
+     *
+     * <p>A type the policy names <i>outright</i> is left alone: naming {@code AccessPolicy} in a policy is a
+     * deliberate grant, and the injected admin-type entries ({@link AdminTypeRules#forAdminMembership}) are
+     * exactly that. Only the wildcard is narrowed, which is what T1 says.
+     *
+     * <p>This gap was invisible until {@code AccessPolicy} became the first admin type served over
+     * {@code /fhir/R4/} — the others reach the API by their own routes, so nothing exercised T1 here.
+     */
+    private IAuthRuleBuilder denyAdminTypesNotNamedOutright(IAuthRuleBuilder rules, CompiledPolicy policy) {
+        boolean hasWildcard = policy.entries().stream().anyMatch(entry -> "*".equals(entry.resourceType()));
+        if (!hasWildcard) {
+            return rules;
+        }
+        for (String adminType : AdminTypeRules.PROJECT_ADMIN_TYPES) {
+            boolean namedOutright = policy.entries().stream()
+                    .anyMatch(entry -> adminType.equals(entry.resourceType()));
+            if (!namedOutright) {
+                String because = "T1: * does not cover " + adminType;
+                rules = appliedTo(rules.deny(because).read(), adminType);
+                rules = appliedTo(rules.deny(because).write(), adminType);
+                rules = appliedTo(rules.deny(because).create(), adminType);
+                rules = appliedTo(rules.deny(because).delete(), adminType);
+            }
         }
         return rules;
     }

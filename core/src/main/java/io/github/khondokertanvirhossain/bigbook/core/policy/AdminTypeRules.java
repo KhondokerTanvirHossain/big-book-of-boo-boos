@@ -17,9 +17,19 @@ import java.util.Set;
  */
 public final class AdminTypeRules {
 
-    /** Types a wildcard never covers (T1). `Package*` and `UserSecurityRequest` are v0.2 types, listed now. */
+    /**
+     * Types a wildcard never covers (T1). `Package*` and `UserSecurityRequest` are v0.2 types, listed now.
+     *
+     * <p>{@code AccessPolicy} is here and <b>not</b> in Medplum's own list (ruled 2026-09-24; a deliberate
+     * divergence). Measured on the running stack: a non-admin member with the default `*` policy could
+     * {@code POST /fhir/R4/AccessPolicy} and get 201. Authoring is not attaching — that needs
+     * {@code ProjectMembership}, which this list already protects — but a member who can author the resource
+     * that constrains them is one {@code ProjectMembership} bug away from choosing their own access, and T1
+     * exists so that assumption is not load-bearing.
+     */
     public static final Set<String> PROJECT_ADMIN_TYPES = Set.of(
-            "Project", "ProjectMembership", "User", "Cron", "PackageRegistry", "PackageVersion", "UserSecurityRequest");
+            "Project", "ProjectMembership", "User", "Cron", "PackageRegistry", "PackageVersion",
+            "UserSecurityRequest", "AccessPolicy");
 
     private AdminTypeRules() {
     }
@@ -47,6 +57,12 @@ public final class AdminTypeRules {
                         List.of("passwordHash", "mfaSecret"),
                         List.of("email", "emailVerified", "mfaEnrolled", "project"), null),
                 new CompiledPolicy.Entry("ProjectMembership", new Criteria.Always(), readAndUpdate,
-                        List.of(), List.of("project", "user"), null));
+                        List.of(), List.of("project", "user"), null),
+                // AccessPolicy gets create and delete as well as readAndUpdate, unlike the three above:
+                // authoring policies is the capability being moved to admins (2026-09-24), so it has to be a
+                // capability they actually have. Administering policies without being able to write one is not
+                // a narrower permission, it is a broken one.
+                new CompiledPolicy.Entry("AccessPolicy", new Criteria.Always(),
+                        Set.of(Interaction.values()), List.of(), List.of(), null));
     }
 }
