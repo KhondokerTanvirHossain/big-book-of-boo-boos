@@ -183,13 +183,17 @@ class PolicyExitTestBBR006Test extends LiteStackTest {
      * unresolved reference rather than a wrong one — and that over-refusal is also what masks phase 2.
      */
     @Test
-    @org.junit.jupiter.api.Disabled("Tracked as #36. NOT a reference-timing problem: measured on 8.12.1 (#35,"
-            + " DeferredPhase2VerifyTest) every reference shape is already substituted at PRECOMMIT — conditional,"
-            + " urn:uuid, and even a forward reference — confirmed by serialising the resource at the pointcut"
-            + " rather than reading a live getter. The same bundle succeeds for a full-access caller, so a"
-            + " RESOLVED reference is being evaluated against the compiled criterion and still refused: the fault"
-            + " is in the matcher or in Observation?subject=%patient, not in the enforcement path. Over-refusal,"
-            + " not a leak. #36 removes this annotation and proves the fix by planting the bug back.")
+    @org.junit.jupiter.api.Disabled("#36, escalated 2026-09-24. Root cause IS known: PRECOMMIT hands the hook a"
+            + " PRE-RESOLUTION copy — the stored resource reads back Patient/<id> while the hook sees"
+            + " Patient?identifier=..., so the criterion is evaluated against a resource that was never stored"
+            + " in that form. Five mechanisms tried, each blocked structurally: (1) the handed copy is raw;"
+            + " (2) re-reading the row returns null inside the transaction for the legitimate and the escaping"
+            + " write alike, and treating null as 'carry on' created a cross-patient Observation — a fail-open"
+            + " hole; (3) TransactionDetails.getResolvedResourceId is keyed by placeholder id, false for a"
+            + " conditional reference; (4) getResolvedMatchUrls has the entry but its value is the internal JPA"
+            + " PID (id=1000, associatedResourceId=null), not the FHIR id the criterion compares; (5) a"
+            + " PID->uuid translation means reaching into HAPI internals. Needs an ADR-001 decision on the"
+            + " enforcement path, so escalated per #36's escalation clause. Over-refusal, not a leak.")
     void aTransactionWithAConditionalReferenceToTheOwnPatientIsAllowed() {
         String token = tokenFor(patientUser, project);
         ResponseEntity<JsonNode> tagged = call(HttpMethod.PUT, "/fhir/R4/" + ownPatient, tokenFor(admin, project),
