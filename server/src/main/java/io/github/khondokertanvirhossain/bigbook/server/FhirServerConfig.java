@@ -96,6 +96,9 @@ public class FhirServerConfig {
         // BB-R-001.6 / D16: on by default, so a reference into another project is refused on write
         settings.setEnforceReferentialIntegrityOnWrite(true);
         settings.setEnforceReferentialIntegrityOnDelete(true);
+        // BB-R-002.5: _filter, off in HAPI by default (HAPI-1222). Medplum supports it, so it is enabled here;
+        // the operator set HAPI actually implements is recorded in medplum-parity.md (issue #9, V2).
+        settings.setFilterParameterEnabled(true);
         return settings;
     }
 

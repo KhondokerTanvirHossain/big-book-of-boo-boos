@@ -4,6 +4,7 @@ import ca.uhn.fhir.interceptor.api.Hook;
 import ca.uhn.fhir.interceptor.api.Interceptor;
 import ca.uhn.fhir.interceptor.api.Pointcut;
 import ca.uhn.fhir.interceptor.model.RequestPartitionId;
+import ca.uhn.fhir.jpa.partition.BaseRequestPartitionHelperSvc;
 import ca.uhn.fhir.jpa.model.config.PartitionSettings;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.api.server.SystemRequestDetails;
@@ -60,7 +61,28 @@ public class PartitionInterceptor {
             // HAPI's own housekeeping, and Big Book's internal context: never reachable with a token (T30)
             return RequestPartitionId.defaultPartition(settings);
         }
+        if (serverWide(request.getResourceName())) {
+            // Types HAPI declares non-partitionable are server-wide infrastructure — SearchParameter,
+            // CodeSystem, StructureDefinition and the rest of its list. Returning a tenant partition for one
+            // is refused with HAPI-1318, which is what blocked runtime SearchParameter registration (#9, V4).
+            // Asking HAPI for the set rather than keeping a copy: a hard-coded list would drift on upgrade.
+            return RequestPartitionId.defaultPartition(settings);
+        }
         return RequestPartitionId.fromPartitionId(context(request).project().partitionId());
+    }
+
+    /**
+     * Whether a type is one HAPI refuses to partition.
+     *
+     * <p><b>These are shared across tenants</b>, which is a real consequence and not a loophole: a
+     * {@code SearchParameter} one project registers is visible to every project, because HAPI's index is
+     * server-wide. BB-R-002 wants runtime search parameters (V4) and HAPI cannot scope them per tenant, so the
+     * sharing is recorded as a divergence in {@code medplum-parity.md} rather than hidden here. Writing them is
+     * still governed by the policy layer, so an ordinary member cannot register one.
+     */
+    private static boolean serverWide(String resourceType) {
+        return resourceType != null
+                && BaseRequestPartitionHelperSvc.NON_PARTITIONABLE_RESOURCE_NAMES.contains(resourceType);
     }
 
     private static ProjectContext context(RequestDetails request) {
