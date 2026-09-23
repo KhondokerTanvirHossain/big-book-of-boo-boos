@@ -1,4 +1,4 @@
-package io.github.khondokertanvirhossain.bigbook.core;
+package io.github.khondokertanvirhossain.bigbook.core.tenant;
 
 import java.util.List;
 import java.util.Locale;
@@ -29,6 +29,14 @@ public class TenantStore {
 
     public Optional<Project> project(UUID id) {
         return jdbc.sql(PROJECT + " WHERE id = :id").param("id", id).query(Project.class).optional();
+    }
+
+    /** The project a HAPI partition belongs to. Subscription delivery carries a partition, not a project id. */
+    public Optional<Project> projectByPartition(int partitionId) {
+        return jdbc.sql(PROJECT + " WHERE partition_id = :partitionId")
+                .param("partitionId", partitionId)
+                .query(Project.class)
+                .optional();
     }
 
     public Optional<Project> superAdminProject() {

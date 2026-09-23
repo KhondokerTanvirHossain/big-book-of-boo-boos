@@ -1,9 +1,9 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
 import ca.uhn.fhir.jpa.partition.IPartitionLookupSvc;
-import io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory;
-import io.github.khondokertanvirhossain.bigbook.core.TenantProvisioner;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.KeycloakDirectory;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantProvisioner;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 import java.util.concurrent.TimeUnit;
 import org.jboss.resteasy.client.jaxrs.internal.ResteasyClientBuilderImpl;
 import org.keycloak.OAuth2Constants;

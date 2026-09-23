@@ -2,7 +2,7 @@ package io.github.khondokertanvirhossain.bigbook.server;
 
 import ca.uhn.fhir.context.FhirContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 import java.time.Duration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

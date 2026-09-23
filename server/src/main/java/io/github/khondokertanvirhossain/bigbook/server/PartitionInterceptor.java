@@ -12,9 +12,9 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
-import io.github.khondokertanvirhossain.bigbook.core.ProjectContext;
-import io.github.khondokertanvirhossain.bigbook.core.TenantException;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.ProjectContext;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantException;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 
 /** One project is one HAPI partition: every read and write goes to the partition of the request's project. */
 @Interceptor

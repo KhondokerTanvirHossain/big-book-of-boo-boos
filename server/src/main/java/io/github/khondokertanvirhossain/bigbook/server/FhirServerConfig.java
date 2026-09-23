@@ -24,10 +24,28 @@ import ca.uhn.fhir.jpa.subscription.channel.config.SubscriptionChannelConfig;
 import ca.uhn.fhir.jpa.util.ResourceCountCache;
 import ca.uhn.fhir.rest.api.IResourceSupportedSvc;
 import ca.uhn.fhir.rest.server.HardcodedServerAddressStrategy;
+import ca.uhn.fhir.jpa.searchparam.MatchUrlService;
+import ca.uhn.fhir.jpa.searchparam.matcher.InMemoryResourceMatcher;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.khondokertanvirhossain.bigbook.core.policy.CriteriaValidator;
+import io.github.khondokertanvirhossain.bigbook.core.policy.PolicyCompiler;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyProvider;
+import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyStore;
+import io.github.khondokertanvirhossain.bigbook.server.policy.CompiledPolicyCache;
+import io.github.khondokertanvirhossain.bigbook.server.policy.CriteriaEvaluator;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyBinder;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyAuthorizationInterceptor;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyDenialLog;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyResolver;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicySubscriptionInterceptor;
+import io.github.khondokertanvirhossain.bigbook.server.policy.SubscriptionAuthorPolicy;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyEnforcementInterceptor;
+import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyWriteInterceptor;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.provider.ResourceProviderFactory;
 import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import org.hl7.fhir.r4.model.Bundle;
@@ -159,20 +177,99 @@ public class FhirServerConfig {
             DatabaseBackedPagingProvider pagingProvider,
             ValueSetOperationProvider valueSetOperationProvider,
             TenantStore tenantStore,
-            PartitionSettings partitionSettings) {
+            PartitionSettings partitionSettings,
+            CriteriaEvaluator criteriaEvaluator,
+            PolicyDenialLog policyDenialLog,
+            PolicyBinder policyBinder,
+            AccessPolicyProvider accessPolicyProvider,
+            SubscriptionAuthorPolicy subscriptionAuthorPolicy) {
         RestfulServer server = new RestfulServer(systemDao.getContext());
         daoRegistry.setSupportedResourceTypes(systemDao.getContext().getResourceTypes());
         server.registerProviders(resourceProviders.createProviders());
         server.registerProvider(systemProvider);
         // terminology operations on ValueSet; $lookup and $validate-code come with the generated providers
         server.registerProvider(valueSetOperationProvider);
+        // AccessPolicy is served from Big Book's own table, not HAPI JPA: the @ResourceDef spike on #7
+        // measured that JPA has no DAO for a runtime-registered type (HAPI-0572), and the failure is
+        // structural. ADR-003's other Medplum admin types will follow this same pattern in v0.2.
+        server.registerProvider(accessPolicyProvider);
         server.setServerConformanceProvider(new JpaCapabilityStatementProvider(
                 server, systemDao, storageSettings, searchParamRegistry, validationSupport));
         server.setPagingProvider(pagingProvider);
         server.registerInterceptor(new PartitionInterceptor(tenantStore, partitionSettings));
         server.registerInterceptor(new InterimOperationDenyInterceptor());
+        // The policy layer (ADR-001), registered in the order it must run: the coarse type × interaction
+        // rules first, so an entirely unpermitted interaction is a 403 before any resource is fetched; then
+        // the criteria hooks, which narrow, drop and hide what the coarse layer let through; then the write
+        // check. Partition scoping stays ahead of all of it — a policy is only ever asked about resources
+        // that are already confined to the caller's project.
+        PolicyDenialLog denialLog = policyDenialLog;
+        // the binder first: every hook below reads the policy it resolves, and a request that reaches them
+        // without one is refused rather than allowed
+        server.registerInterceptor(policyBinder);
+        server.registerInterceptor(new PolicyAuthorizationInterceptor(denialLog));
+        server.registerInterceptor(new PolicyEnforcementInterceptor(criteriaEvaluator, denialLog));
+        server.registerInterceptor(new PolicyWriteInterceptor(criteriaEvaluator, denialLog));
+        // subscription delivery leaves the server without passing the REST hooks above, so the author's policy
+        // is applied on its own two pointcuts. Inert until #12 records subscription authorship — see
+        // SubscriptionAuthorPolicy, which fails closed rather than guessing an author.
+        server.registerInterceptor(new PolicySubscriptionInterceptor(
+                subscriptionAuthorPolicy, criteriaEvaluator, systemDao.getContext(), denialLog));
         server.setServerAddressStrategy(new HardcodedServerAddressStrategy(properties.fhirBaseUrl()));
         return server;
+    }
+
+    @Bean
+    public CriteriaValidator criteriaValidator(FhirContext fhirContext, InMemoryResourceMatcher matcher) {
+        return new CriteriaValidator(fhirContext, matcher);
+    }
+
+    @Bean
+    public PolicyCompiler policyCompiler(CriteriaValidator criteriaValidator, MatchUrlService matchUrlService) {
+        return new PolicyCompiler(criteriaValidator, matchUrlService);
+    }
+
+    @Bean
+    public AccessPolicyStore accessPolicyStore(JdbcClient jdbcClient, ObjectMapper objectMapper) {
+        return new AccessPolicyStore(jdbcClient, objectMapper);
+    }
+
+    @Bean
+    public AccessPolicyProvider accessPolicyProvider(AccessPolicyStore store, CriteriaValidator criteriaValidator,
+            ObjectMapper objectMapper, FhirContext fhirContext) {
+        return new AccessPolicyProvider(store, criteriaValidator, objectMapper, fhirContext);
+    }
+
+    @Bean
+    public CriteriaEvaluator criteriaEvaluator(InMemoryResourceMatcher inMemoryResourceMatcher) {
+        return new CriteriaEvaluator(inMemoryResourceMatcher);
+    }
+
+    @Bean
+    public PolicyDenialLog policyDenialLog() {
+        return new PolicyDenialLog();
+    }
+
+    @Bean
+    public CompiledPolicyCache compiledPolicyCache() {
+        return new CompiledPolicyCache();
+    }
+
+    @Bean
+    public PolicyResolver policyResolver(PolicyCompiler policyCompiler, AccessPolicyStore accessPolicyStore,
+            CompiledPolicyCache compiledPolicyCache, ObjectMapper objectMapper) {
+        return new PolicyResolver(policyCompiler, accessPolicyStore, compiledPolicyCache, objectMapper);
+    }
+
+    @Bean
+    public PolicyBinder policyBinder(PolicyResolver policyResolver) {
+        return new PolicyBinder(policyResolver);
+    }
+
+    @Bean
+    public SubscriptionAuthorPolicy subscriptionAuthorPolicy(TenantStore tenantStore, PolicyResolver policyResolver,
+            FhirContext fhirContext) {
+        return new SubscriptionAuthorPolicy(tenantStore, policyResolver, fhirContext);
     }
 
     @Bean

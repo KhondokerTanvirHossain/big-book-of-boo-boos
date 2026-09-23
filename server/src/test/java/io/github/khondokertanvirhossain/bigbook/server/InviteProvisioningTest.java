@@ -67,7 +67,7 @@ class InviteProvisioningTest extends LiteStackTest {
         String email = "half-" + UUID.randomUUID() + "@bigbook.test";
         // a Keycloak user with an organisation membership, but a Big Book row still provisioning
         String userId = seedUser(email);
-        new io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory(keycloak.realm(TenantConfig.REALM))
+        new io.github.khondokertanvirhossain.bigbook.core.tenant.KeycloakDirectory(keycloak.realm(TenantConfig.REALM))
                 .ensureOrganizationMember(keycloak.realm(TenantConfig.REALM).organizations()
                         .search(project.toString(), true, 0, 1).get(0).getId(), userId);
         store.insertProvisioningMembership(project, email, false);

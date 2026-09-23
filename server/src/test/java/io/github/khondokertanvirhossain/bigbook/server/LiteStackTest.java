@@ -1,8 +1,8 @@
 package io.github.khondokertanvirhossain.bigbook.server;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import io.github.khondokertanvirhossain.bigbook.core.KeycloakDirectory;
-import io.github.khondokertanvirhossain.bigbook.core.TenantStore;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.KeycloakDirectory;
+import io.github.khondokertanvirhossain.bigbook.core.tenant.TenantStore;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
