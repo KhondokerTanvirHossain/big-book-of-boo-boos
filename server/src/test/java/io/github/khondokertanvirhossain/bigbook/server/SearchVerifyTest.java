@@ -136,9 +136,15 @@ class SearchVerifyTest extends LiteStackTest {
         System.out.println("VERIFY-V6 _total=accurate -> total=" + accurate.getBody().path("total").asText("<absent>"));
 
         // does the next link echo the caller's parameters (D17) or re-serialise them?
-        ResponseEntity<JsonNode> paged = call(HttpMethod.GET, "/fhir/R4/Patient?_count=2&_summary=true", token, null,
-                JsonNode.class, "Cache-Control", "no-cache");
-        System.out.println("VERIFY-V6 next link with _summary=true -> " + nextLink(paged.getBody()));
+        for (String partial : List.of("_summary=true", "_elements=name", "_summary=text", "_sort=family",
+                "_include=Patient:general-practitioner")) {
+            ResponseEntity<JsonNode> paged = call(HttpMethod.GET, "/fhir/R4/Patient?_count=2&" + partial, token,
+                    null, JsonNode.class, "Cache-Control", "no-cache");
+            String next = nextLink(paged.getBody());
+            String key = partial.substring(0, partial.indexOf('='));
+            System.out.println("VERIFY-V6 next echoes " + key + "? "
+                    + (next.contains(key) ? "YES" : "NO ") + " -> " + next);
+        }
     }
 
     /** V9: SUBSETTED tagging on _summary and _elements (D44). */

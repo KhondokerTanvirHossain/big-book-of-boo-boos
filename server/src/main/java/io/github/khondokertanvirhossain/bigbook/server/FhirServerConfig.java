@@ -201,6 +201,8 @@ public class FhirServerConfig {
         server.setPagingProvider(pagingProvider);
         server.registerInterceptor(new PartitionInterceptor(tenantStore, partitionSettings));
         server.registerInterceptor(new InterimOperationDenyInterceptor());
+        // paging links echo _summary, which HAPI drops (BB-R-002, D17; measured in #9's V6)
+        server.registerInterceptor(new SearchLinkEchoInterceptor());
         // The policy layer (ADR-001), registered in the order it must run: the coarse type × interaction
         // rules first, so an entirely unpermitted interaction is a 403 before any resource is fetched; then
         // the criteria hooks, which narrow, drop and hide what the coarse layer let through; then the write
