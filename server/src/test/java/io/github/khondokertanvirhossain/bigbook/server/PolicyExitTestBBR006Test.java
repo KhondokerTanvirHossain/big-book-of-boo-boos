@@ -183,12 +183,14 @@ class PolicyExitTestBBR006Test extends LiteStackTest {
      * unresolved reference rather than a wrong one — and that over-refusal is also what masks phase 2.
      */
     @Test
-    @org.junit.jupiter.api.Disabled("Open finding on #7: a conditional reference is NOT rewritten on the"
-            + " resource handed to PRECOMMIT when the transaction is a plain POST entry, so phase 2 evaluates"
-            + " Patient?identifier=... and refuses a write that is inside the caller's criteria. Verify (d)"
-            + " measured the opposite on a probe whose reference resolved — the two differ, and which one"
-            + " generalises decides whether phase 2 can enforce reference criteria at all. Reported rather"
-            + " than worked around: the fail-closed direction is safe, so this is over-refusal, not a leak.")
+    @org.junit.jupiter.api.Disabled("STILL FAILING, and the cause is NOT reference-resolution timing — measured"
+            + " 2026-09-24 in DeferredPhase2VerifyTest. On 8.12.1 every reference shape is already substituted at"
+            + " PRECOMMIT (conditional, urn:uuid, and even a forward reference where the Observation is entry 1),"
+            + " confirmed by serializing the resource at PRECOMMIT rather than reading a live getter. So the"
+            + " deferred TransactionSynchronization path would not fix this: the criterion is evaluated against a"
+            + " RESOLVED reference and still refuses. Whatever is wrong is in the matcher or the compiled"
+            + " criterion, not in when the reference is rewritten. Raised on #7 rather than worked around; the"
+            + " direction is over-refusal, not a leak.")
     void aTransactionWithAConditionalReferenceToTheOwnPatientIsAllowed() {
         String token = tokenFor(patientUser, project);
         ResponseEntity<JsonNode> tagged = call(HttpMethod.PUT, "/fhir/R4/" + ownPatient, tokenFor(admin, project),
