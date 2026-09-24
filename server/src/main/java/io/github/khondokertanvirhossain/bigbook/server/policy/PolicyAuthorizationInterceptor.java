@@ -55,7 +55,7 @@ public class PolicyAuthorizationInterceptor extends AuthorizationInterceptor {
         }
 
         IAuthRuleBuilder rules = new RuleBuilder();
-        rules = denyAdminTypesNotNamedOutright(rules, policy);
+        rules = denyAdminTypesNotNamedOutright(rules, policy, request);
         for (CompiledPolicy.Entry entry : policy.entries()) {
             rules = appendRulesFor(rules, entry);
         }
@@ -120,9 +120,19 @@ public class PolicyAuthorizationInterceptor extends AuthorizationInterceptor {
      * <p>This gap was invisible until {@code AccessPolicy} became the first admin type served over
      * {@code /fhir/R4/} — the others reach the API by their own routes, so nothing exercised T1 here.
      */
-    private IAuthRuleBuilder denyAdminTypesNotNamedOutright(IAuthRuleBuilder rules, CompiledPolicy policy) {
+    private IAuthRuleBuilder denyAdminTypesNotNamedOutright(
+            IAuthRuleBuilder rules, CompiledPolicy policy, RequestDetails request) {
         boolean hasWildcard = policy.entries().stream().anyMatch(entry -> "*".equals(entry.resourceType()));
         if (!hasWildcard) {
+            return rules;
+        }
+        if (request.getResourceName() == null) {
+            // A request that names no type — following a `_getpages` paging cursor is the common one. HAPI's
+            // `resourcesOfType` deny MATCHES such a request rather than abstaining, so emitting these rules here
+            // refuses page 2 of every search with "T1: * does not cover Cron" (regression from #34, caught by
+            // T1PagingRegressionTest). Omitting them is safe: a cursor returns the results of a search that was
+            // already authorised by type when it ran, and every resource in it still passes the PREACCESS drop,
+            // which knows each one's actual type and applies the same policy.
             return rules;
         }
         for (String adminType : AdminTypeRules.PROJECT_ADMIN_TYPES) {

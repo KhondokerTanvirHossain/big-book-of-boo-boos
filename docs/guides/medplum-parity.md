@@ -50,6 +50,13 @@ Recorded so nobody "fixes" Big Book back to Medplum's behaviour. Principle: BIGB
 | V5b | `:in` / `:not-in` in a criterion | Degraded to equality (`:not-in` inverts) — D15. | **Rejected at write time.** HAPI 8.12.1 reports them *supported*, but the ValueSet is not expanded: `:in` matched nothing and `:not-in` matched everything against a code that is in the set (measured, issue #7). Silently inverted access is worse than refused. **Lift condition, v0.2 candidate (ADR-001 Open):** a test proving expansion works. |
 | V5c | `:missing` in a criterion | Supported; D15 and ADR-001 both named `:not`/`:missing` as *the* evaluable pair. | **Not evaluable on HAPI 8.12.1** — `Qualified parameter not supported` — so rejected at write time. ADR-001 and this row amended 2026-09-22. |
 | T1a | Who may author an `AccessPolicy` | **Any member with a `*` policy.** `AccessPolicy` is not in Medplum's project-admin type list, and a membership with no policy compiles to `{resourceType:'*'}`, so an ordinary member can create one. Measured on the running stack: `POST /fhir/R4/AccessPolicy` as a non-admin member returned **201**. | **A project-admin type (T1).** A `*` entry no longer covers it; `membership.admin` reaches it through the injected admin-type rules, with every interaction (unlike `Project`/`User`/`ProjectMembership`, which are read-and-update — administering policies without being able to write one is broken, not narrower). Authoring is not attaching, so this was not a completed escalation, but a member who can author the resource that constrains them is one `ProjectMembership` bug away from choosing their own access, and T1 exists so that assumption is not load-bearing. Ruled 2026-09-24. |
+| V2a | `_filter` with `not (…)` | Supported — Medplum's `_filter` builds a full expression tree. | **Rejected**: `HAPI-1056: Expression did not terminate`. Fails as `not (…)` and `not(…)` alike, so it is a capability gap rather than a spelling. `ne` covers the common negation (measured, #9). |
+| V2b | `_filter` with a dotted path (`subject.name eq "x"`) | Supported — Medplum recurses into the full search builder, so a `_filter` can chain. | **Rejected**: `HAPI-1206: Unknown search parameter "subject"`. HAPI's `_filter` does not chain. Ordinary chained search (`subject.name=x`, outside `_filter`) works and is the documented alternative (measured, #9). |
+| V2c | `_filter` availability | On. | **Off in HAPI by default** (`HAPI-1222`), enabled by Big Book. Not a divergence in behaviour — recorded because a stock HAPI does not answer `_filter` at all. |
+| — | `:missing` and `:contains` on search | Supported. | Supported, but **off in HAPI by default** and enabled by Big Book. Worth recording for the failure mode: without the missing-field index a `:missing` search does not 400, it builds malformed SQL and **500s** (`Columns used for unreferenced tables [HFJ_SPIDX_DATE]`), and `:contains` returns **405**. Both measured on #9. **Note:** enabling the index does *not* make `:missing` evaluable by `InMemoryResourceMatcher`, so V5's write-time rejection of `:missing` in an `AccessPolicy` criterion stands (ADR-001). |
+| — | `:above` / `:below` on a plain token parameter | Not supported (Medplum 400s — T23 says not to assert those 400s). | **Also 400 on HAPI 8.12.1** (measured, #9). The task listed these as a gain from HAPI; they apply to hierarchical and URI parameters, not to every token, so for `Observation?code` there is no gain to record. Noted so the T23 line is not read as Big Book answering them. |
+| — | `:not` semantics | Excludes resources matching the value. | Same, and stated because it surprises: HAPI's `:not` requires the parameter to be **present with a different value**. `family:not=Flanders` returns **nothing** when no resource carries a `Flanders` family at all, rather than every Patient not called Flanders. That is the documented FHIR reading; measured on #9, where it caught a wrong expectation in Big Book's own test rather than a defect. |
+| — | Runtime `SearchParameter` registration | Boot-time bundles only. | **Runtime, and picked up without `$reindex`** (measured, #9 V4). Big Book had to route HAPI's non-partitionable types to the default partition first: a tenant partition on `SearchParameter` is refused with `HAPI-1318`. **Consequence: these types are shared across tenants**, because HAPI's search index is server-wide and it refuses to partition them. Writing them is still governed by the policy layer, so an ordinary member cannot register one. |
 | D57 | Subscription delivery vs the author's `AccessPolicy` | **The check is a no-op.** Medplum resolves the subscription author's policy and then does not apply it to the delivered resource, so a restricted author's subscription delivers resources they could not read over REST. | **Enforced.** The author's criteria suppress firing at `SUBSCRIPTION_RESOURCE_MATCHED` and their `hiddenFields` are stripped from the payload at `SUBSCRIPTION_BEFORE_REST_HOOK_DELIVERY`. Delivery is the one path a resource leaves the server without passing `PREACCESS`, so without this a subscription is a way around the whole read path. Fails closed: an unresolvable author does not fire (issue #7; the author is recorded by #12). |
 | — | `AccessPolicy` storage | A first-class table in Medplum's own schema. | A Big Book Postgres table partitioned by `project_id`, served by a plain `IResourceProvider` rather than HAPI JPA. Not a divergence in behaviour — the resource is readable and writable at `/fhir/R4/AccessPolicy` in Medplum's JSON shape — but the reason is worth recording: HAPI JPA has no DAO for a runtime-registered `@ResourceDef` type (`HAPI-0572`), because it generates DAOs and search indexes from the structures it ships (spiked on #7). The same pattern serves the other Medplum admin types in v0.2 (ADR-003). |
 | D16 | Cross-project references | `checkReferencesOnWrite` off by default; a resource may store a reference into another project. | `enforce_referential_integrity_on_write` on by default; per-project switch kept. |
@@ -72,3 +79,46 @@ Recorded so nobody "fixes" Big Book back to Medplum's behaviour. Principle: BIGB
 | D28 | `$export` async | Ignores `Prefer: respond-async`; unconditionally async; poll URL `/fhir/R4/bulkdata/export/:id`, manifest `requiresAccessToken: false` hardcoded. | Bulk Data IG conformant (HAPI); Medplum poll URLs aliased for SDK-grade (v0.2). |
 | T46 | `$validate` body | `validateResource` POSTs a bare resource, not `Parameters`. | Accepted as-is (HAPI takes both). Do not "fix" the SDK path. |
 | T52 | `_offset` on `_history` | `readHistory` sends `_offset`, not `_getpagesoffset`. | v0.2 alias (D45). |
+
+## Medplum `search/` doc examples (issue #9)
+
+BB-R-002's acceptance criterion is that Medplum's own documented search examples run unchanged. All four
+categories are exercised end to end by `SearchParityTest`, against the stack with tenancy and the policy layer
+in the path — the point being that "HAPI supports it" is not the same as "a Big Book caller can do it".
+
+### "Wire" means the component *can* do it, not that it does by default
+
+Three features BB-R-002 specifies as **wire** were not merely unconfigured on HAPI's defaults — they were
+absent, broken, or refused:
+
+| Feature | Specified as | On HAPI 8.12.1 defaults | Made to work by |
+|---|---|---|---|
+| `_filter` | wire | **absent** — `HAPI-1222: _filter parameter is disabled on this server` | `setFilterParameterEnabled(true)` |
+| `:missing` | wire | **broken** — not a 400 but malformed SQL and a **500**: `Columns used for unreferenced tables [HFJ_SPIDX_DATE]` | `setIndexMissingFields(ENABLED)` |
+| `:contains` | wire | **refused** — `405 Method Not Allowed` | `setAllowContainsSearches(true)` |
+
+Each would have shipped as "HAPI supports it, nothing to do" had the verify-first block not run a request. The
+`:missing` case is the sharpest: a default-configuration server answers a perfectly legal search with a 500 and
+a SQL fragment, which is worse than an honest rejection.
+
+**The lesson for every remaining `wire` row in REQUIREMENTS.md:** a fill marked *wire* still needs one request
+per feature before it can be called done. Wire is a statement about the component's capability, not about its
+defaults, and the gap between the two is where a 500 lives.
+
+| Category | Example run | Result |
+|---|---|---|
+| basic | `Patient?family=Simpson`, `Patient?family:exact=`, `:contains`, `:not`, `:missing` | unchanged |
+| chained | `Observation?subject.name=Simpson` (forward), `Patient?_has:Observation:subject:code=` (reverse) | unchanged |
+| includes | `_include`, `_revinclude`, `_include=*` (T24), `_include:iterate` | unchanged |
+| `_filter` | `eq`, `ne`, `co`, `sw`, `gt`, `and`, `or`, parenthesised groups | unchanged; `not` and dotted paths diverge — rows V2a/V2b above |
+
+Sorting, `_total=accurate`, `_count` with `next`, `_summary` and `_elements` are covered by the same class and
+by `SearchPagingSummaryTest`. The issue's exit-test query
+(`Observation?subject.name=Simpson&_include=Observation:subject&_sort=-date&_count=…`) runs as written, returns a
+page with a followable `next`, and blind `next`-following terminates.
+
+Two notes for anyone reading the issue text alongside this file:
+
+- The issue names `docs/guides/parity.md`; the file is `docs/guides/medplum-parity.md`. Same document.
+- The issue lists `:above`/`:below` among the modifiers "gained from HAPI". On a plain token parameter they are
+  400 on 8.12.1 — see the row above. Nothing was lost; the gain simply was not there to record.
