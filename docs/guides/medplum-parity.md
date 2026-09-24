@@ -79,3 +79,27 @@ Recorded so nobody "fixes" Big Book back to Medplum's behaviour. Principle: BIGB
 | D28 | `$export` async | Ignores `Prefer: respond-async`; unconditionally async; poll URL `/fhir/R4/bulkdata/export/:id`, manifest `requiresAccessToken: false` hardcoded. | Bulk Data IG conformant (HAPI); Medplum poll URLs aliased for SDK-grade (v0.2). |
 | T46 | `$validate` body | `validateResource` POSTs a bare resource, not `Parameters`. | Accepted as-is (HAPI takes both). Do not "fix" the SDK path. |
 | T52 | `_offset` on `_history` | `readHistory` sends `_offset`, not `_getpagesoffset`. | v0.2 alias (D45). |
+
+## Medplum `search/` doc examples (issue #9)
+
+BB-R-002's acceptance criterion is that Medplum's own documented search examples run unchanged. All four
+categories are exercised end to end by `SearchParityTest`, against the stack with tenancy and the policy layer
+in the path — the point being that "HAPI supports it" is not the same as "a Big Book caller can do it".
+
+| Category | Example run | Result |
+|---|---|---|
+| basic | `Patient?family=Simpson`, `Patient?family:exact=`, `:contains`, `:not`, `:missing` | unchanged |
+| chained | `Observation?subject.name=Simpson` (forward), `Patient?_has:Observation:subject:code=` (reverse) | unchanged |
+| includes | `_include`, `_revinclude`, `_include=*` (T24), `_include:iterate` | unchanged |
+| `_filter` | `eq`, `ne`, `co`, `sw`, `gt`, `and`, `or`, parenthesised groups | unchanged; `not` and dotted paths diverge — rows V2a/V2b above |
+
+Sorting, `_total=accurate`, `_count` with `next`, `_summary` and `_elements` are covered by the same class and
+by `SearchPagingSummaryTest`. The issue's exit-test query
+(`Observation?subject.name=Simpson&_include=Observation:subject&_sort=-date&_count=…`) runs as written, returns a
+page with a followable `next`, and blind `next`-following terminates.
+
+Two notes for anyone reading the issue text alongside this file:
+
+- The issue names `docs/guides/parity.md`; the file is `docs/guides/medplum-parity.md`. Same document.
+- The issue lists `:above`/`:below` among the modifiers "gained from HAPI". On a plain token parameter they are
+  400 on 8.12.1 — see the row above. Nothing was lost; the gain simply was not there to record.
