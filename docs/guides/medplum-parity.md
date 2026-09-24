@@ -86,6 +86,25 @@ BB-R-002's acceptance criterion is that Medplum's own documented search examples
 categories are exercised end to end by `SearchParityTest`, against the stack with tenancy and the policy layer
 in the path — the point being that "HAPI supports it" is not the same as "a Big Book caller can do it".
 
+### "Wire" means the component *can* do it, not that it does by default
+
+Three features BB-R-002 specifies as **wire** were not merely unconfigured on HAPI's defaults — they were
+absent, broken, or refused:
+
+| Feature | Specified as | On HAPI 8.12.1 defaults | Made to work by |
+|---|---|---|---|
+| `_filter` | wire | **absent** — `HAPI-1222: _filter parameter is disabled on this server` | `setFilterParameterEnabled(true)` |
+| `:missing` | wire | **broken** — not a 400 but malformed SQL and a **500**: `Columns used for unreferenced tables [HFJ_SPIDX_DATE]` | `setIndexMissingFields(ENABLED)` |
+| `:contains` | wire | **refused** — `405 Method Not Allowed` | `setAllowContainsSearches(true)` |
+
+Each would have shipped as "HAPI supports it, nothing to do" had the verify-first block not run a request. The
+`:missing` case is the sharpest: a default-configuration server answers a perfectly legal search with a 500 and
+a SQL fragment, which is worse than an honest rejection.
+
+**The lesson for every remaining `wire` row in REQUIREMENTS.md:** a fill marked *wire* still needs one request
+per feature before it can be called done. Wire is a statement about the component's capability, not about its
+defaults, and the gap between the two is where a 500 lives.
+
 | Category | Example run | Result |
 |---|---|---|
 | basic | `Patient?family=Simpson`, `Patient?family:exact=`, `:contains`, `:not`, `:missing` | unchanged |
