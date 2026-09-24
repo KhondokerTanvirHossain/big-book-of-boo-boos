@@ -141,6 +141,38 @@ class SearchParityTest extends LiteStackTest {
                 .startsWith("1999");
     }
 
+    /**
+     * The remaining parameters BB-R-002 lists. All standard HAPI, but the issue names them, and "HAPI supports
+     * it" has already proved different from "a Big Book caller can use it" three times on this issue
+     * (`_filter` off, `:missing` 500, `:contains` 405). One request each is cheap insurance.
+     */
+    @Test
+    void theRemainingListedParameters() {
+        String id = homer.substring("Patient/".length());
+        record Case(String label, String query, boolean expectEntries) {}
+        for (Case probe : List.of(
+                new Case("_id", "/fhir/R4/Patient?_id=" + id, true),
+                new Case("_lastUpdated", "/fhir/R4/Patient?_lastUpdated=gt2000-01-01", true),
+                new Case("_tag", "/fhir/R4/Patient?_tag=http%3A%2F%2Fexample.org%7Cnone", false),
+                new Case("_profile", "/fhir/R4/Patient?_profile=http%3A%2F%2Fexample.org%2Fnone", false),
+                new Case("_security", "/fhir/R4/Patient?_security=http%3A%2F%2Fexample.org%7Cnone", false),
+                new Case("_source", "/fhir/R4/Patient?_source=http%3A%2F%2Fexample.org%2Fnone", false),
+                new Case("_offset", "/fhir/R4/Patient?_offset=1&_count=1", true),
+                new Case("_elements", "/fhir/R4/Patient?_elements=name", true))) {
+            ResponseEntity<JsonNode> response = search(probe.query());
+            System.out.println("PARITY param " + probe.label() + " -> " + response.getStatusCode()
+                    + " entries=" + response.getBody().path("entry").size());
+            assertThat(response.getStatusCode())
+                    .as("%s must be answered, not rejected: %s", probe.label(), response.getBody())
+                    .isEqualTo(HttpStatus.OK);
+            if (probe.expectEntries()) {
+                assertThat(response.getBody().path("entry"))
+                        .as("%s must actually match something, or it proves nothing", probe.label())
+                        .isNotEmpty();
+            }
+        }
+    }
+
     /** The issue's exit test, as written. */
     @Test
     void theExitTestBundle() {
