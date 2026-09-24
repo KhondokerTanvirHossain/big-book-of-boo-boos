@@ -34,6 +34,7 @@ import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyProvid
 import io.github.khondokertanvirhossain.bigbook.server.policy.AccessPolicyStore;
 import io.github.khondokertanvirhossain.bigbook.server.policy.CompiledPolicyCache;
 import io.github.khondokertanvirhossain.bigbook.server.policy.CriteriaEvaluator;
+import io.github.khondokertanvirhossain.bigbook.server.policy.MatchUrlReferenceResolver;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyBinder;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyAuthorizationInterceptor;
 import io.github.khondokertanvirhossain.bigbook.server.policy.PolicyDenialLog;
@@ -191,6 +192,7 @@ public class FhirServerConfig {
             PartitionSettings partitionSettings,
             CriteriaEvaluator criteriaEvaluator,
             PolicyDenialLog policyDenialLog,
+            MatchUrlReferenceResolver matchUrlReferenceResolver,
             PolicyBinder policyBinder,
             AccessPolicyProvider accessPolicyProvider,
             SubscriptionAuthorPolicy subscriptionAuthorPolicy) {
@@ -222,7 +224,7 @@ public class FhirServerConfig {
         server.registerInterceptor(policyBinder);
         server.registerInterceptor(new PolicyAuthorizationInterceptor(denialLog));
         server.registerInterceptor(new PolicyEnforcementInterceptor(criteriaEvaluator, denialLog));
-        server.registerInterceptor(new PolicyWriteInterceptor(criteriaEvaluator, denialLog));
+        server.registerInterceptor(new PolicyWriteInterceptor(criteriaEvaluator, denialLog, matchUrlReferenceResolver));
         // subscription delivery leaves the server without passing the REST hooks above, so the author's policy
         // is applied on its own two pointcuts. Inert until #12 records subscription authorship — see
         // SubscriptionAuthorPolicy, which fails closed rather than guessing an author.
@@ -251,6 +253,11 @@ public class FhirServerConfig {
     public AccessPolicyProvider accessPolicyProvider(AccessPolicyStore store, CriteriaValidator criteriaValidator,
             ObjectMapper objectMapper, FhirContext fhirContext) {
         return new AccessPolicyProvider(store, criteriaValidator, objectMapper, fhirContext);
+    }
+
+    @Bean
+    public MatchUrlReferenceResolver matchUrlReferenceResolver(DaoRegistry daoRegistry, MatchUrlService matchUrlService) {
+        return new MatchUrlReferenceResolver(daoRegistry, matchUrlService);
     }
 
     @Bean
