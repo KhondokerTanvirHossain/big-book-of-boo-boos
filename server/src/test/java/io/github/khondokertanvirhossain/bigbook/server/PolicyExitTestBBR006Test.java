@@ -183,17 +183,6 @@ class PolicyExitTestBBR006Test extends LiteStackTest {
      * unresolved reference rather than a wrong one — and that over-refusal is also what masks phase 2.
      */
     @Test
-    @org.junit.jupiter.api.Disabled("#36, escalated 2026-09-24. Root cause IS known: PRECOMMIT hands the hook a"
-            + " PRE-RESOLUTION copy — the stored resource reads back Patient/<id> while the hook sees"
-            + " Patient?identifier=..., so the criterion is evaluated against a resource that was never stored"
-            + " in that form. Five mechanisms tried, each blocked structurally: (1) the handed copy is raw;"
-            + " (2) re-reading the row returns null inside the transaction for the legitimate and the escaping"
-            + " write alike, and treating null as 'carry on' created a cross-patient Observation — a fail-open"
-            + " hole; (3) TransactionDetails.getResolvedResourceId is keyed by placeholder id, false for a"
-            + " conditional reference; (4) getResolvedMatchUrls has the entry but its value is the internal JPA"
-            + " PID (id=1000, associatedResourceId=null), not the FHIR id the criterion compares; (5) a"
-            + " PID->uuid translation means reaching into HAPI internals. Needs an ADR-001 decision on the"
-            + " enforcement path, so escalated per #36's escalation clause. Over-refusal, not a leak.")
     void aTransactionWithAConditionalReferenceToTheOwnPatientIsAllowed() {
         String token = tokenFor(patientUser, project);
         ResponseEntity<JsonNode> tagged = call(HttpMethod.PUT, "/fhir/R4/" + ownPatient, tokenFor(admin, project),
@@ -225,6 +214,71 @@ class PolicyExitTestBBR006Test extends LiteStackTest {
                 .as("a conditional reference to my own patient is inside my criteria and must be allowed: %s",
                         allowed.getBody())
                 .isTrue();
+    }
+
+    /**
+     * The zero-match case, and the one a plant proved was missing: a conditional reference that resolves to
+     * <b>nothing</b> must refuse, not carry on.
+     *
+     * <p>#36's cross-patient 201 came from exactly this: a resolution that produced nothing was treated as
+     * "leave the reference alone", the criterion was then evaluated against an unparseable string, and the write
+     * was committed. The existing escape test does not cover it — that one resolves to the <i>wrong</i> patient,
+     * which fails the criterion honestly. This one resolves to no patient at all.
+     */
+    @Test
+    void aConditionalReferenceThatResolvesToNothingIsRefused() {
+        String token = tokenFor(patientUser, project);
+        Map<String, Object> bundle = Map.of("resourceType", "Bundle", "type", "transaction",
+                "entry", List.of(Map.of(
+                        "request", Map.of("method", "POST", "url", "Observation"),
+                        "resource", Map.of("resourceType", "Observation", "status", "final",
+                                "code", Map.of("text", "resolves-to-nothing"),
+                                // no Patient carries this identifier
+                                "subject", Map.of("reference",
+                                        "Patient?identifier=urn:bigbook:exit|no-such-patient")))));
+
+        ResponseEntity<JsonNode> refused = call(HttpMethod.POST, "/fhir/R4", token, bundle, JsonNode.class);
+
+        assertThat(refused.getStatusCode().is2xxSuccessful())
+                .as("a reference resolving to nothing must not be treated as 'carry on': %s", refused.getBody())
+                .isFalse();
+        // and the refusal must come from the RESOLVER, not from the unresolved string happening to fail the
+        // criterion: a resolver that returns the raw match URL on zero matches also refuses here, for the wrong
+        // reason. The denial log records which decided it.
+        assertThat(String.valueOf(refused.getBody()))
+                .as("the resolver refuses before the criteria run, so the message is the resolver's")
+                .contains("could not be checked against the caller's access policy");
+    }
+
+    /**
+     * The multiple-match case: two Patients carry the identifier, so the reference is ambiguous and the write
+     * must be refused rather than resolved to whichever came back first.
+     */
+    @Test
+    void anAmbiguousConditionalReferenceIsRefused() {
+        String ambiguous = "ambiguous-" + UUID.randomUUID();
+        for (int i = 0; i < 2; i++) {
+            call(HttpMethod.POST, "/fhir/R4/Patient", tokenFor(admin, project),
+                    Map.of("resourceType", "Patient",
+                            "identifier", List.of(Map.of("system", "urn:bigbook:exit", "value", ambiguous)),
+                            "name", List.of(Map.of("family", "Ambiguous" + i))),
+                    JsonNode.class);
+        }
+        Map<String, Object> bundle = Map.of("resourceType", "Bundle", "type", "transaction",
+                "entry", List.of(Map.of(
+                        "request", Map.of("method", "POST", "url", "Observation"),
+                        "resource", Map.of("resourceType", "Observation", "status", "final",
+                                "code", Map.of("text", "ambiguous-reference"),
+                                "subject", Map.of("reference",
+                                        "Patient?identifier=urn:bigbook:exit|" + ambiguous)))));
+
+        ResponseEntity<JsonNode> refused = call(HttpMethod.POST, "/fhir/R4", tokenFor(patientUser, project), bundle,
+                JsonNode.class);
+
+        assertThat(refused.getStatusCode().is2xxSuccessful())
+                .as("an ambiguous reference must be refused, not resolved to the first match: %s",
+                        refused.getBody())
+                .isFalse();
     }
 
     /** readonlyFields: the write succeeds and the stored value wins, silently — Medplum's semantics. */

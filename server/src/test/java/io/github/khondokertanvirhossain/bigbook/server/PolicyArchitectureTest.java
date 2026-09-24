@@ -147,6 +147,12 @@ class PolicyArchitectureTest {
         //                                         Criteria.Never, which grants nothing.
         //   PolicyResolver.compile              — a policy document will not compile; the only exit is
         //                                         PolicyDefaults.denyAll, so the caller gets nothing at all.
+        //   MatchUrlReferenceResolver.search     — a conditional reference will not resolve; the only exits are
+        //                                         null (which requireResolvedStateInsideCriteria turns into a
+        //                                         403 and a rollback) or a single resolved id. It never returns
+        //                                         the unresolved reference — that exact tolerance committed a
+        //                                         cross-patient Observation with 201 during #36, and a plant
+        //                                         proves the zero-match test catches its return.
         //                                         (Was PolicyBinder.resolve until the resolver was extracted
         //                                         for subscription delivery; same handler, same argument.)
         //
@@ -156,7 +162,8 @@ class PolicyArchitectureTest {
         org.assertj.core.api.Assertions.assertThat(failClosed)
                 .as("every RuntimeException handler in the policy path must be a fail-closed boundary: see the comment above")
                 .containsOnly("CriteriaValidator.requireWritable", "PolicyCompiler.compileCriteria",
-                        "PolicyResolver.compile");
+                        "PolicyResolver.compile",
+                        "MatchUrlReferenceResolver.search");
     }
 
 }

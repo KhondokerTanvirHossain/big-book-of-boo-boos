@@ -47,10 +47,13 @@ public class PolicyWriteInterceptor {
 
     private final CriteriaEvaluator evaluator;
     private final PolicyDenialLog denialLog;
+    private final MatchUrlReferenceResolver matchUrlResolver;
 
-    public PolicyWriteInterceptor(CriteriaEvaluator evaluator, PolicyDenialLog denialLog) {
+    public PolicyWriteInterceptor(CriteriaEvaluator evaluator, PolicyDenialLog denialLog,
+            MatchUrlReferenceResolver matchUrlResolver) {
         this.evaluator = evaluator;
         this.denialLog = denialLog;
+        this.matchUrlResolver = matchUrlResolver;
     }
 
     /** Phase 1 on create: no existing resource, so only the new one — and only if it is resolved. */
@@ -85,17 +88,81 @@ public class PolicyWriteInterceptor {
     }
 
     /**
-     * Phase 2 on create and update. References are resolved by now, so a criterion on a reference
-     * ({@code Observation?subject=Patient/x}) is finally answerable for a transaction entry.
+     * Phase 2 on create and update, against a copy whose references are all literal.
+     *
+     * <p>{@code urn:uuid} placeholders arrive substituted; conditional references do not, and are resolved here
+     * by {@link MatchUrlReferenceResolver} (ADR-001, #36). A reference that cannot be resolved refuses the
+     * write — see {@link #resolvedForCheck}.
      */
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_CREATED)
     public void afterCreate(IBaseResource created, RequestDetails request) {
-        requireInsideCriteria(request, created, Interaction.CREATE);
+        requireResolvedStateInsideCriteria(request, created, Interaction.CREATE);
     }
 
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_UPDATED)
     public void afterUpdate(IBaseResource existing, IBaseResource updated, RequestDetails request) {
-        requireInsideCriteria(request, updated, Interaction.UPDATE);
+        requireResolvedStateInsideCriteria(request, updated, Interaction.UPDATE);
+    }
+
+    /**
+     * Phase 2. The criteria run against a <b>fully resolved</b> copy, or the write is refused.
+     *
+     * <p>Refusing on an unresolvable reference is the point, not a side effect: during #36's investigation a
+     * path that carried on when resolution produced nothing committed a cross-patient Observation with 201.
+     */
+    private void requireResolvedStateInsideCriteria(
+            RequestDetails request, IBaseResource handed, Interaction interaction) {
+        CompiledPolicy policy = policyFor(request);
+        if (policy == null || handed == null) {
+            return;
+        }
+        IBaseResource resolved = resolvedForCheck(handed, request);
+        if (resolved == null) {
+            String type = handed.fhirType();
+            denialLog.denied(callerOf(request), type, handed.getIdElement().getIdPart(), interaction.name(),
+                    policy, "a reference could not be resolved for the phase-2 check");
+            throw new ForbiddenOperationException(
+                    "This " + type + " could not be checked against the caller's access policy");
+        }
+        requireInsideCriteria(request, resolved, interaction);
+    }
+
+    /**
+     * A copy with every match-URL reference replaced by the literal id it names, or {@code null} if any could
+     * not be resolved.
+     *
+     * <p>A <b>copy</b>, so substituting for the check never alters what gets stored — the resolved ids exist
+     * only for the criteria evaluation. Returns the handed resource unchanged when nothing needs resolving,
+     * which is the ordinary single-write case and costs no search.
+     */
+    private IBaseResource resolvedForCheck(IBaseResource handed, RequestDetails request) {
+        FhirTerser terser = request.getFhirContext().newTerser();
+        boolean needsResolving = terser.getAllResourceReferences(handed).stream()
+                .anyMatch(reference -> MatchUrlReferenceResolver.isMatchUrl(
+                        reference.getResourceReference().getReferenceElement().getValue()));
+        if (!needsResolving) {
+            return handed;
+        }
+        IBaseResource copy = copyOf(handed, request);
+        for (var reference : request.getFhirContext().newTerser().getAllResourceReferences(copy)) {
+            var element = reference.getResourceReference().getReferenceElement();
+            String value = element.getValue();
+            if (!MatchUrlReferenceResolver.isMatchUrl(value)) {
+                continue;
+            }
+            String literal = matchUrlResolver.resolve(value, request);
+            if (literal == null) {
+                return null;
+            }
+            reference.getResourceReference().setReference(literal);
+        }
+        return copy;
+    }
+
+    /** Parse-of-encode rather than {@code copy()}: works for any resource type without a cast. */
+    private IBaseResource copyOf(IBaseResource resource, RequestDetails request) {
+        var parser = request.getFhirContext().newJsonParser();
+        return parser.parseResource(resource.getClass(), parser.encodeResourceToString(resource));
     }
 
     /**
