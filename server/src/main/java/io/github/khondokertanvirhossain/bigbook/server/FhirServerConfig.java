@@ -99,6 +99,14 @@ public class FhirServerConfig {
         // BB-R-002.5: _filter, off in HAPI by default (HAPI-1222). Medplum supports it, so it is enabled here;
         // the operator set HAPI actually implements is recorded in medplum-parity.md (issue #9, V2).
         settings.setFilterParameterEnabled(true);
+        // BB-R-002.1 lists :missing among the enabled modifiers. HAPI does not index missing-ness by default,
+        // and with it off a :missing search does not 400 — it builds MALFORMED SQL and 500s ("Columns used for
+        // unreferenced tables [HFJ_SPIDX_DATE]", measured in #9). Enabling the index is the supported answer.
+        // Note for #7: this does NOT make :missing evaluable by InMemoryResourceMatcher, which is a separate
+        // code path — V5's write-time rejection of :missing in a policy criterion stands (ADR-001, 2026-09-22).
+        settings.setIndexMissingFields(JpaStorageSettings.IndexEnabledEnum.ENABLED);
+        // :contains, also off by default — a 405 rather than a 400 without it (measured, #9). BB-R-002.1 lists it.
+        settings.setAllowContainsSearches(true);
         return settings;
     }
 
