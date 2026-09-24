@@ -80,9 +80,20 @@ class PollerDrivenDeliveryVerifyTest extends LiteStackTest {
         try {
             SubscriptionDeliveringRestHookListener listener = new SubscriptionDeliveringRestHookListener();
             listener.setFhirContextForUnitTest(fhirContext);
-            // the collaborator the first run identified: handleMessage broadcasts
-            // SUBSCRIPTION_BEFORE_REST_HOOK_DELIVERY, so a poller must supply the broadcaster. That is also how
-            // Big Book's own policy check on delivery (#7, D57) stays in the path.
+            // -------------------------------------------------------------------------------------------
+            // REQUIRED, and not incidental plumbing — do not strip this when the poller is built.
+            //
+            // handleMessage broadcasts SUBSCRIPTION_BEFORE_REST_HOOK_DELIVERY, and that broadcast is where
+            // Big Book's delivery-policy check runs: PolicySubscriptionInterceptor hooks that pointcut to
+            // apply the subscription author's AccessPolicy and strip hiddenFields from the payload (#7, D57 —
+            // Medplum's own check is a no-op, so this is a divergence Big Book relies on).
+            //
+            // Without an IInterceptorBroadcaster, handleMessage NPEs and nothing is delivered (measured, #12)
+            // — so the failure is loud rather than silent. But a poller that supplied a *no-op* broadcaster to
+            // quiet it would deliver successfully while skipping the policy check entirely: the author's
+            // criteria and hiddenFields would stop being applied, and a subscription would become a way around
+            // the read path. Supply the real one.
+            // -------------------------------------------------------------------------------------------
             setField(listener, "myInterceptorBroadcaster", interceptorBroadcaster);
 
             Subscription subscription = new Subscription();
