@@ -155,6 +155,18 @@ class SubscriptionSubmitSeamVerifyTest extends LiteStackTest {
     static class Replacing extends SubscriptionMatcherInterceptor {
         @Override
         protected void processResourceModifiedMessage(ResourceModifiedMessage message) {
+            // ---------------------------------------------------------------------------------------------
+            // super is NEVER called, and must not be — not even partially.
+            //
+            // HAPI's submit path has TWO exits, not one: it persists the message through
+            // IResourceModifiedMessagePersistenceSvc and then consumes it through IResourceModifiedConsumer.
+            // It persists even with setSubscriptionChangeQueuedImmediately(true) — measured on 8.12.1, #12.
+            //
+            // So there is no "delegate just for the persistence, keep our own delivery" middle ground: any
+            // partial delegation puts the event back into HAPI's own pipeline alongside Big Book's delivery
+            // table and reintroduces the double delivery that ADR-002 Open 1 exists to rule out.
+            // Replacement means replacement.
+            // ---------------------------------------------------------------------------------------------
             seenByOverride.add(String.valueOf(message.getPayloadId()));
             transactionActive.add(TransactionSynchronizationManager.isSynchronizationActive());
         }
